@@ -1,0 +1,157 @@
+syntax = "proto3";
+package seanhagen.workernator;
+option go_package = "github.com/seanhagen/workernator";
+
+import "google/protobuf/timestamp.proto";
+
+// JobType contains the types of jobs that can be started. 
+enum JobType {
+  // Noop doesn't take any arguments, because it doesn't do
+  // anything. See `docs/design.md` for more.
+  Noop = 0;
+
+  // Fibonacci takes one argument, an int named 'fib'. That is the
+  // fibonacci number that will be calculated.  So an argument of 1
+  // would produce 0, 2 => 1, 3 => 1, 4 => 2, etc. The job is only
+  // limited by how much memory it requires to compute.
+  Fibonacci = 1;
+
+  // ExpressionEval is a job that takes 1+ arguments. The first is a
+  // string named 'expr' that defines a mathmatical expression such as
+  // '1 + 2', '4 / 2', '2.3 * 0.2'. It can also handle variables, seen
+  // in expressions such as '2x * 3y'. When such expressions are
+  // given, the job will expect additional arguments that provide
+  // values. For example, if given '2x * 3y', the job will expect two
+  // additional arguments -- one named 'x', and one named 'y'. They
+  // have to be integer or float values, they can't be bool or string.
+  ExpressionEval = 2;
+
+  // WaitSend takes two arguments: a string named 'url' that contains
+  // a valid URL, and an integer named 'wait' that defines how long to
+  // wait ( in seconds ) before sending a GET request to the URL from
+  // the 'url' argument.
+  WaitSend = 3;
+}
+
+// JobStatus contains the possible states for a job to be in. 
+enum JobStatus {
+  // Unknown typically means that there is no job that matches the
+  // given ID.
+  Unknown = 0;
+
+  // Running is the state a job is in while it is processing. 
+  Running = 1;
+
+  // Failed means the job either failed to start, or encountered an issue
+  // while it was running. More information can be found by checking the job
+  // logs.
+  Failed = 2;
+
+  // Finished means the job completed it's task and is no longer running.
+  Finished = 3;
+
+  // Stopped means the job was stopped by a user before it finished.
+  Stopped = 4;
+}
+
+message NoopArgs {}
+
+message FibonacciArgs {
+  int64 number = 1;
+}
+
+message ExpressionEvalArgs {
+  string expression = 1;
+  map<string, float> args = 2;
+}
+
+message WaitThenPostHTTPArgs {
+  string url_to_post = 1;
+  int32 wait_seconds = 2;
+}
+
+message Arguments {
+  oneof data {
+    NoopArgs noop = 1;
+    FibonacciArgs fib = 2;
+    ExpressionEvalArgs expr = 3;
+    WaitThenPostHTTPArgs wait = 4;
+  }
+}
+
+// Job contains information about a job that was created at some point while the
+// service is running.
+message Job {
+  string id = 1;
+  int32 pid = 2;
+  
+  JobStatus status = 10;
+  Arguments args = 12;
+
+  JobType type = 20;
+  google.protobuf.Timestamp started_at = 21;
+  google.protobuf.Timestamp ended_at = 22;
+}
+
+
+// JobStatusRequest is used to request the status of a job.
+message JobStatusRequest {
+  string id = 1;
+}
+
+// JobStatusResponse returns the Job, if found.
+message JobStatusResponse {
+  Job job = 1;
+}
+
+// JobStopRequest is sent to 'Stop' to request a job be stopped
+// immediately.
+message JobStopRequest {
+  string id = 1;
+}
+
+// JobStartRequest is sent to request a job be started in the service.
+message JobStartRequest {
+  JobType job_type = 1;
+  Arguments args = 2;
+}
+
+// TailJobRequest is sent to the 'Tail' method to specify job output
+// should be streamed.
+message TailJobRequest {
+  string id = 1;
+}
+
+// TailJobResponse contains a single line from the output of a job,
+// including timestamps.
+message TailJobResponse {
+  string line = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+// Service defines the methods available in the Workernator service.
+service Service {
+  // Start creates a job and attempts to run it. It returns as soon as
+  // the job has begun running.
+  //
+  // Jobs each have their own set of required arguments; sending the
+  // wrong or invalid arguments will cause the job to fail to start.
+  rpc Start(JobStartRequest) returns (Job){}
+
+  // Stop will force-stop the job matching the ID provided. This
+  // method will attempt to stop the job as quickly as possible, and
+  // does not take into account what the job may be doing at any
+  // particular moment. This method will wait until the job has been
+  // sucesfully stopped before returning.
+  rpc Stop(JobStopRequest) returns (Job){}
+
+  // Status returns the current status of any job known to the
+  // service. This uses the more generic 'Id' message instead of a
+  // more tailored 'JobStatusRequest' message because this method is
+  // just a straight-forward lookup-by-id. 
+  rpc Status(JobStatusRequest) returns (Job) {}
+
+  // Tail returns a stream of log lines from the job. It always
+  // returns the full log from the beginning of job execution.
+  rpc Tail(TailJobRequest) returns (stream TailJobResponse){}
+}

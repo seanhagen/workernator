@@ -5,27 +5,6 @@ state: draft
 
 # RFD 78 - Workernator
 
-## From Challenge 
-Library
-
-    Worker library with methods to start/stop/query status and get the output of a job.
-    Library should be able to stream the output of a running job.
-        Output should be from start of process execution.
-        Multiple concurrent clients should be supported.
-    Add resource control for CPU, Memory and Disk IO per job using cgroups.
-    Add resource isolation for using PID, mount, and networking namespaces.
-
-API
-
-    GRPC API to start/stop/get status/stream output of a running process.
-    Use mTLS authentication and verify client certificate. Set up strong set of cipher suites for TLS and good crypto setup for certificates. Do not use any other authentication protocols on top of mTLS.
-    Use a simple authorization scheme.
-
-Client
-
-    CLI should be able to connect to worker service and start, stop, get status, and stream output of a job.
-
-
 ## What 
 
 A simple, bare-bones worker manager, with a core library, GRPC API, and CLI client.
@@ -38,6 +17,13 @@ resources and namespaces for PID, networking, & mount isolation.
 ## Details 
 
 ### Library
+
+    Worker library with methods to start/stop/query status and get the output of a job.
+    Library should be able to stream the output of a running job.
+        Output should be from start of process execution.
+        Multiple concurrent clients should be supported.
+    Add resource control for CPU, Memory and Disk IO per job using cgroups.
+    Add resource isolation for using PID, mount, and networking namespaces.
 
 Right off the bat: this isn't meant to be a generic job-running library. If that
 was what was needed, we could use something like Faktory to host a job
@@ -201,7 +187,13 @@ This is, of course, a simplified version without error checking and other bits &
 pieces. 
 
 
-### API 
+### API
+
+    GRPC API to start/stop/get status/stream output of a running process.
+    Use mTLS authentication and verify client certificate. Set up strong set of cipher suites for TLS and good crypto setup for certificates. Do not use any other authentication protocols on top of mTLS.
+    Use a simple authorization scheme.
+
+
 
 I'm not going to go over the entire protobuf definition here, rather let's go
 over some of the design choices. If you want to follow along, you can check out
@@ -272,6 +264,7 @@ files. This is mostly so that if there's a need to generate code for other
 languages that there's already a clear pattern as to how that should work.
 
 ### CLI Client 
+
 Calling the CLI client without any arguments will print out a help message that
 describes the basics of how to use the client.
 

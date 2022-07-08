@@ -38,7 +38,7 @@ The job manager is the workhorse; it is what launches jobs when a user makes a r
 
 There are a few things that will be required for the library: a way to **register** a job, a way to **start** a job, a way to **stop** a job, a way to get the **status** of a job, and lastly a way to **tail the output** of a job.
 
-This will be accomplished
+This will be accomplished using some types that will probably look something like this:
 
 ```go
 // Interactor allows a job to create output logs, log the results of a job, or report an error

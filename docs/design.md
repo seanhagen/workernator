@@ -44,33 +44,34 @@ was what was needed, we could use something like Faktory to host a job
 server. There are also cloud services that provide similar functionality. 
 
 Instead, the library is designed to know what jobs it's able to run; including
-what arguments are required. There are two reasons behind this decision.
+what arguments are required. The main reason for this is that this way we get to
+take full advantage of the type system.
 
-The first is that this way we get to take full advantage of the type
-system. Because most job-runners ( such as Faktory ) are built to allow *any*
-kind of job to get run they have to rely on things like `interface{}/any` or
-JSON strings to provide data to a job when it starts. This is not great; it's
-slow, and adds a nasty potential error spot to the system. Also, if we were just
-going to send JSON-in-a-string then why use GRPC?
+Other job-runner services ( such as Faktory ) are built to allow *any* kind of
+job to get run they have to rely on things like `interface{}/any` or JSON
+strings to provide data to a job when it starts. This is not great; the
+conversion and manual type checking add effort better spent elsewhere, and
+additionally adds a potential bug-prone section to the code.
 
-The second is that this way we surface information about the jobs and their
-arguments right up to the API itself. No need to look at comments or
-documentation or even the code to figure out what a job does -- the name and
-arguments should hopefully provide enough info to deduce what a job does. This
-doesn't mean there is no need for documentation; rather that the entire system
-is designed to surface as much info to a developer when and where they're
-writing code by taking advantage of auto-complete in IDEs.
+Also, if we were just going to send JSON-in-a-string then why use GRPC?
+
+As an additional side-benefit, this means that the API ( both the external GRPC
+API and the code-library API ) should provide enough information about what jobs
+are available and what arguments they take. This should help devs rely on their
+IDE auto-completion and documentation tooling rather than a browser -- at least
+that's the hope!
 
 #### Running Jobs
 
 The system will take care of setting up namespaces & cgroups for each job. It
-uses these to give each job it's own container to run in; with the added bonus
-of being able to limit how much memory & CPU each job is allowed to use.
+uses these to give each job it's own container to run in. This allows the system
+to isolate a running job from the rest of the system it runs on, but also allows
+workernator to control how much CPU & memory a job has while running.
 
-By calling `/proc/self/exe` in the fashion detailed
-[in this article](https://www.infoq.com/articles/build-a-container-golang/) and
-[this series of articles](https://medium.com/@teddyking/linux-namespaces-850489d3ccf), we
-can have the job worker running in what amounts to it's own container.
+This is accomplished by calling `/proc/self/exe` in the fashion detailed [in
+this stand-alone article](https://www.infoq.com/articles/build-a-container-golang/) and
+[this series of
+articles](https://medium.com/@teddyking/linux-namespaces-850489d3ccf). 
 
 The way this works is a multi-step process:
 
@@ -128,18 +129,84 @@ This takes two arguments:
  - `wait_seconds`, which is how long the worker will wait before sending a bare
    HTTP POST request to the URL in `url_to_post`
 
+#### Tailing & Concurrent Clients
+
+For all the other currently defined routes, the communication is a more
+traditional request & response. The 'tail' route is different, as it streams
+the output back to the client -- including previous output lines when the client
+first connects.
+
+The library will be responsible for managing the output of each job that is
+started. While a job is still "alive", the output will be stored in an in-memory
+buffer. Once the job has completed, the data in that in-memory buffer will get
+flushed to a file on disk. The file will be encoded using a simple text format
+such as JSON or CSV. However, none of this is exposed outside of the library;
+the library will only expose a method something like this:
+
+```go
+ReadJobLog(ctx context.Context, id string, output chan OutputLine)
+```
+
+Where `OutputLine` is the following type:
+
+```go
+type OutputLine struct {
+  Line string
+  Timestamp time.Time
+}
+```
+
+The `ReadJobLog` method checks first to see if the ID it was given matches a
+currently running job. If it finds one, it copies each `OutputLine` from the
+in-memory buffer and sends it to the `output` channel.
+
+If there is no running job with the given ID, it checks to see if there is a
+finished job with that ID. If there is, it opens the file and parses each line
+into a `OutputLine` before sending it to the `output` channel.
+
+If there is also no finished job with the given ID, the method will return
+simply return. The library will have other functions that can be used to check
+if a given job ID is valid, and should be used before calling `ReadJobLog` to
+validate the ID.
+
+If there *are* logs to be sent, `ReadJobLog` will send each output line in
+order. Once it has finished, it will close the channel.
+
+The caller of `ReadJobLog` can use the `context.Context` it passes in to cancel the
+reading of job logs, such as when a GRPC API client disconnects.
+
+In the GRPC service, we should end up with something similar to this:
+
+```go
+func (g *grpcService) Tail(strm pb.Tail_WorkerServer) (*pb.TailJobResponse, error ) {
+	ctx := strm.Context()
+	if err := g.manager.JobExists(ctx, req.GetId()); err != nil {
+		// if the Id doesn't match any current or historical job, return an error
+		return nil, err
+	}
+
+	out := make(chan lib.OutputLine)
+
+	go g.manager.ReadJobLog(ctx, req.GetId(), out)
+
+	for line := <-out {
+		strm.Send(convertLineToPB(line))
+	}
+
+	strm.Close()
+}
+```
+
+This is, of course, a simplified version without error checking and other bits &
+pieces. 
+
+
 ### API 
 
 I'm not going to go over the entire protobuf definition here, rather let's go
 over some of the design choices. If you want to follow along, you can check out
 the [workernator.proto](/proto/workernator.proto) file where all this is
 defined.
-
-Also, because the main language we're targeting for code generation is Go, the
-GRPC protobuf file has Go-style comments. These are included in the generated Go
-code, giving us nice `godoc` comments for use in a docs page or through IDE
-auto-complete ( which often shows the documentation when auto-completing a
-function or type ).
 
 #### Job Type
 

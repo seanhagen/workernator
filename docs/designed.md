@@ -34,7 +34,8 @@ when it starts. This is not great; the conversion and manual type checking add
 effort better spent elsewhere, and additionally adds a potential bug-prone
 section to the code.
 
-Also, if we were just going to send JSON-in-a-string then why use GRPC?
+Also, if we were just going to send JSON-in-a-string &#x2013; why use GRPC? Let's take
+advantage of all that type checking goodness.
 
 As an additional side-benefit, this means that the API ( both the external GRPC
 API and the code-library API ) should provide enough information about what jobs

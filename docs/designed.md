@@ -28,10 +28,10 @@ functionality. Instead, the library is designed to know what jobs it's able to
 run; including what arguments are required. The main reason for this is that
 this way we get to take full advantage of the type system.
 
-Other job-runner services are built to allow *any* kind of job to get run they
-have to rely on things like `interface{}/any` or JSON strings to provide data to
-a job when it starts. This is not great; the conversion and manual type checking
-add effort better spent elsewhere, and additionally adds a potential bug-prone
+Other job-runner services are built to allow *any* kind of job arguments, which
+means often relying on `interface{}/any` or JSON strings to provide data to a job
+when it starts. This is not great; the conversion and manual type checking add
+effort better spent elsewhere, and additionally adds a potential bug-prone
 section to the code.
 
 Also, if we were just going to send JSON-in-a-string then why use GRPC?
@@ -42,10 +42,10 @@ are available and what arguments they take. This should help devs rely on their
 IDE auto-completion and documentation tooling rather than a browser &#x2013; at least
 that's the hope!
 
-One note before we dive in: don't treat the names of types, functions, or
-concepts in this document as "final". I tend to iterate & change names as I work
-as the "purpose" of a type or function becomes more clear as the code gets
-fleshed out.
+> One note before we dive in: don't treat the names of types, functions, or
+> concepts in this document as "final". I tend to iterate & change names as I work
+> as the "purpose" of a type or function becomes more clear as the code gets
+> fleshed out.
 
 
 ### Library

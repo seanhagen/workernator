@@ -27,11 +27,10 @@ resources and namespaces for PID, networking, & mount isolation.
 
 Right off the bat: this isn't meant to be a generic job-running library. If that
 was what was needed, we could use something like Faktory to host a job
-server. There are also cloud services that provide similar functionality. 
-
-Instead, the library is designed to know what jobs it's able to run; including
-what arguments are required. The main reason for this is that this way we get to
-take full advantage of the type system.
+server. There are also cloud services that provide similar
+functionality. Instead, the library is designed to know what jobs it's able to
+run; including what arguments are required. The main reason for this is that
+this way we get to take full advantage of the type system.
 
 Other job-runner services ( such as Faktory ) are built to allow *any* kind of
 job to get run they have to rely on things like `interface{}/any` or JSON
@@ -85,49 +84,17 @@ job, or tailing the output logs of a job. The PID is stored as a backup measure;
 if a job fails to stop, or is somehow left hanging when the manager is stopped
 the PID can be used to properly kill the process manually.
 
-#### Available Jobs
-
-Workernator ships with a number of built-in jobs; these are mostly to show off
-how to write jobs and register them.
-
-The jobs are:
-
-**Fibonacci**
-
-Takes one argument: the Fibonacci number to compute. So an argument of 1 would
-produce a result of 0, an argument of 2 would produce 1, etc.
-
-**Expression Evaluator**
-
-Takes minimum one argument, and potentially more.
-
-The first argument is the expression to evaluate -- this is a mathmatical
-formula that you wish to have computed. For example, you could send `1 + 2`, `4
-/ 2`, `2.3 * 1.2`, or `3 - 1`. Additionally, you can also include variables,
-such as `2x * 3 + y`. However, when you put variables into an expression to get
-evaluated, you must include the values of those variables in your request.
-
-**Wait Then Send**
-
-This takes two arguments:
-
- - `url_to_post`, which must be a valid HTTP URL reachable from workernator, and
- - `wait_seconds`, which is how long the worker will wait before sending a bare
-   HTTP POST request to the URL in `url_to_post`
-
-#### Tailing & Concurrent Clients
-
-For all the other currently defined routes, the communication is a more
-traditional request & response. The 'tail' route is different, as it streams
-the output back to the client -- including previous output lines when the client
-first connects.
+#### Job Output
 
 The library will be responsible for managing the output of each job that is
 started. While a job is still "alive", the output will be stored in an in-memory
-buffer. Once the job has completed, the data in that in-memory buffer will get
-flushed to a file on disk. The file will be encoded using a simple text format
-such as JSON or CSV. However, none of this is exposed outside of the library;
-the library will only expose a method something like this:
+buffer. Once the job has stopped (regardless of whether it completed
+successfully, it was stopped, or it died due to an error), the data in that
+in-memory buffer will get flushed to a file on disk. The file will be encoded
+using a simple text format such as JSON or CSV. 
+
+However, none of this is exposed outside of the library; the library will only
+expose a method something like this:
 
 ```go
 ReadJobLog(ctx context.Context, id string, output chan OutputLine)
@@ -158,6 +125,24 @@ validate the ID.
 If there *are* logs to be sent, `ReadJobLog` will send each output line in
 order. Once it has finished, it will close the channel.
 
+#### Stopping Jobs
+
+As part of starting a job, the library will keep the `*exec.Cmd` pointer around
+in a lookup table. The library will remove the pointer from the lookup table
+once the job stops running ( whether it completes successfully or not ).
+
+If a user makes a request to stop a job, the library will use the lookup table
+to see if it's a job it knows about. If it is, it will use
+`cmd.ProcessState.Exited()` to see if the job is still running. If it is, it'll
+use `cmd.Process.Kill()` to kill the job.
+
+#### Tailing & Concurrent Clients
+
+For all the other currently defined routes, the communication is a more
+traditional request & response. The 'tail' route is different, as it streams the
+output back to the client -- including output lines from before the client first
+connected.
+
 The caller of `ReadJobLog` can use the `context.Context` it passes in to cancel the
 reading of job logs, such as when a GRPC API client disconnects.
 
@@ -182,9 +167,6 @@ func (g *grpcService) Tail(strm pb.Tail_WorkerServer) (*pb.TailJobResponse, erro
 	strm.Close()
 }
 ```
-
-This is, of course, a simplified version without error checking and other bits &
-pieces. 
 
 
 ### API

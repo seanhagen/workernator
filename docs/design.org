@@ -65,15 +65,17 @@ job, and lastly a way to *tail the output* of a job.
 This is all done with the following types:
 
 #+begin_src go
-  type JobData struct {
-    Name string
-    Arguments []string
-  }
-
+  // Interactor allows a job to create output logs, log the results of a job, or report an error
+  // in the format expected by the job manager so it can parse the logs properly.
   type Interactor interface {
     Log(string) // prints the string with timestamp & tag
     Result(any) // prints the result, with timestamp & tag
     Error(err) // prints out the error, with timestamp & tag
+  }
+
+  // JobData contains 
+  type JobData struct {
+    Arguments []string
   }
 
   type JobFunction func(JobData,Interactor) error
@@ -126,7 +128,7 @@ However, to code using the library to manage jobs, this is all hidden behind
 this function:
 
 #+begin_src go
-StartJob(args JobData) (*JobInfo,error)
+StartJob(name string, args JobData) (*JobInfo,error)
 #+end_src
 
 Where the =JobInfo= struct that gets returned contains useful information such as

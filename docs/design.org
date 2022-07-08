@@ -1,22 +1,27 @@
+#+TITLE: RFD 78 - Workernator
+#+AUTHOR: Sean Hagen (sean.hagen@gmail.com)
+#+EXPORT_FILE_NAME: designed.md
+#+STATE: draft
 #+STARTUP: showall expand
-#+options: toc:nil
-#+begin_src yaml :exports results :results value markdown
+#+OPTIONS: toc:nil H:9 author:t prop:t email:t date:t creator:t
+
+#+begin_src yaml :exports results :results value html
   ---
   authors: Sean Hagen (sean.hagen@gmail.com)
   state: draft
   ---
 #+end_src
-#+TITLE: RFD 78 - Workernator
 
-* What
+* RFD 78 - Workernator
+** What
 A simple, bare-bones worker manager, with a core library, GRPC API, and CLI
 client.
 
-* Why
+** Why
 To have a worker manager that can use cGroups & namespaces to manage compute
 resources and namespaces for PID, networking, & mount isolation.
 
-* Details
+** Details
 Right off the bat: this isn't meant to be a generic job-running service. If that
 was what was needed, we could use something like Faktory to host a job
 server. There are also cloud services that provide similar
@@ -43,7 +48,7 @@ concepts in this document as "final". I tend to iterate & change names as I work
 as the "purpose" of a type or function becomes more clear as the code gets
 fleshed out.
 
-** Library
+*** Library
 The library is made up of two parts; the job manager, and the jobs.
 
 The job manager is the workhorse; it is what launches jobs when a user makes a
@@ -76,7 +81,7 @@ This is all done with the following types:
   }
 #+end_src
 
-*** Registering Jobs
+**** Registering Jobs
 The library will provide a function that can be used to register a job function:
 
 #+begin_src go
@@ -87,7 +92,7 @@ The =Job= struct should contain the name of the job that will be used later when
 starting a job; the =JobFunction= function is the "worker" ( cause it does the
 actual work! ).
 
-*** Starting Jobs
+**** Starting Jobs
 There are a few steps involved in launching a job.
 
 The first step is running the same =workernator= binary, but with different
@@ -127,7 +132,7 @@ the ID of the job.
 An error will be returned only if the data in =args= contains an invalid job, or
 incorrect arguments for the job.
 
-**** CGroups & Namespaces - Resource Control and Isolation
+***** CGroups & Namespaces - Resource Control and Isolation
 When starting a job, =workernator= does more than just launch a goroutine and call
 it a day.
 
@@ -143,7 +148,7 @@ special arguments that enable the creation of new namespaces. This is also what
 allows us to configure cgroups so that we can limit the amount of available RAM
 or CPU to a running job.
 
-*** Stopping Jobs
+**** Stopping Jobs
 Using the =exec.Cmd= pointer that was created in the process of starting a job, we
 can use =exec.Cmd.Process.Kill()= to force the job to stop.
 
@@ -161,7 +166,7 @@ return an error.
 This function is idempotent, if =StopJob= is called with the ID of a job that has
 already been stopped, the function will simply return the =JobInfo= pointer.
 
-*** Querying Job Status
+**** Querying Job Status
 The library will provide the following function:
 
 #+begin_src go
@@ -171,7 +176,7 @@ JobStatus(id string) (*JobInfo, error)
 If the =id= parameter contains the ID of a current or past job, the function will
 return the =JobInfo= for that job. Otherwise it will return an error.
 
-*** Get Job Output
+**** Get Job Output
 An important part of running a job is being able to get the output of the
 job. Similar to being able to use the command line tool =tail=, the library
 provides a method that streams the output of a running job to any client that
@@ -202,7 +207,7 @@ additional metadata such as timestamps.
 Once =TailJob= has read and sent all lines from a job, it closes the channel. This
 means that as long as the job is running, the channel stays open.
 
-**** Storing Job Output
+***** Storing Job Output
 As part of launching a job, we are able to set the =Stdout= and =Stderr= of a
 =exec.Cmd= to any =io.Writer= of our choosing. This will be used to capture the
 output of a job and store it in memory while the job is running.
@@ -217,7 +222,7 @@ potentially asking for the same output log without ballooning the amount of
 memory being used. While this does mean that job info is lost when the service
 shuts down, doing anything more is out of scope for this exercise.
 
-**** Concurrency
+***** Concurrency
 The library will support multiple clients requesting the output of a single job
 at once. The hard part for getting the output logs concurrently would probably
 actually be determining when to free the buffer used to store the output, rather
@@ -233,19 +238,19 @@ may be something where the scope changes drastically as actual code starts
 getting written. However, as we're sticking with simple and small scope, the
 library will simply keep all the output in memory for now. 
 
-** API
+*** API
     GRPC API to start/stop/get status/stream output of a running process.
     Use mTLS authentication and verify client certificate.
       Set up strong set of cipher suites for TLS and good crypto setup for certificates.
       Do not use any other authentication protocols on top of mTLS.
     Use a simple authorization scheme.
     
-*** GRPC API Definition
+**** GRPC API Definition
 We're not going to go over the entire protobuf definition here, instead we'll
 cover some of the design decisions so we're all on the same page. However,
 please do check out [[/proto/workernator.proto][workernator.proto]] to see the entire protobuf definition.
 
-**** Job Type
+***** Job Type
 As part of the definition of a job, each job has a 'type'. This type defines
 what the job does, as well as what arguments it expects.
 
@@ -256,7 +261,7 @@ this be the value for an "actual" job, instead this is assigned to a job that
 does nothing and doesn't print anything. This way, a configuration, programmer,
 or simple clumsy-fingered mistake won't start the wrong job.
 
-**** Job Request Messages
+***** Job Request Messages
 There are two potential messages that each of =Stop=, =Status=, and =Tail= could
 have used:
 
@@ -290,20 +295,20 @@ message type.
 This is the route I chose, as I can see lots of potential functionality
 requiring expanding each of the request messages for =Stop=, =Status=, and =Tail=.
 
-**** The "Arguments" Message Type
+***** The "Arguments" Message Type
 Not a lot to say about this one, but just in case you were curious: this message
 type is here so that there's no chance that the =args= field in the =Job= message
 type and the =args= field in the =JobStartRequest= message type don't accidentally
 diverge.
 
-**** Separate Folders
+***** Separate Folders
 This one is mostly a personal preference thing, but I prefer to keep the
 protobuf definition files separate from the code generated from those
 files. This is mostly so that if there's a need to generate code for other
 languages that there's already a clear pattern as to how that should work and
 where files should go.
 
-*** Authentication
+**** Authentication
 The GRPC service will use mTLS for authentication. A unique certificate will be
 generated for each client.
 
@@ -313,10 +318,10 @@ these two ciphers:
  - =tls.TLS_CHACHA20_POLY1305_SHA256=
  - =tls.TLS_AES_128_GCM_SHA256=
    
-**** NOTE: Clarification Required
+***** NOTE: Clarification Required
 Ask for more detail on what they mean by "good crypto setup for certificates".
 
-*** Authorization
+**** Authorization
 Rather than using JWT or something else to authorize users, instead we'll use
 some of the features of TLS!
 
@@ -334,26 +339,26 @@ slightly different meanings.
 
 Below is each subject key, the 'proper' name, and what we're using it for ( if
 we're using it differently than the name would suggest ).
-**** Keys
-***** Organization Name
+***** Keys
+****** Organization Name
 *Key:* O
 
 Using this basically as intended, putting 'Teleport' as the value.
 
-***** Organizational Unit Name
+****** Organizational Unit Name
 *Key:* OU
 
 I'm putting =workernator=, with the idea that this could be used to put the name
 of the service the certificate is meant to be used with.
 
-***** Common Name
+****** Common Name
 *Key:* CN
 
 Typically used for the name of the person "responsible" for the TLS certificate
 on the server, we're using it to identify whether the certificate is meant to be
 used by a server or a client. Handy for when things get mis-named!
 
-***** Locality Name
+****** Locality Name
 *Key:* L
 
 This is normally used to name the city or local region where the server or
@@ -362,7 +367,7 @@ server admin is located.
 Here we're going to use it to identify the user making a request. This will be
 used to look up what permissions and abilities the user has.
 
-**** Usage
+***** Usage
 The *O*, *ON*, and *CN* keys are the "core" keys, and should be present regardless of
 whether the certificate is meant to be used by a server or a client. Both
 clients and servers will use those three keys when validating a certificate.
@@ -370,7 +375,7 @@ clients and servers will use those three keys when validating a certificate.
 As for the *L* key, only the servers will pay attention and use that key. Clients
 will ignore this key if it's in a server certificate.
 
-** Command-Line Client
+*** Command-Line Client
 The client is going to be built using [[https://cobra.dev/][cobra]].
 
 If called with no arguments, it will print out some basic information and some
@@ -402,7 +407,7 @@ Use "workernator [command] --help" for more information about a command.
 From here on, the output of the command will be truncated for clarity and
 comprehension.
 
-*** Starting, Stopping, & Getting Job Status
+**** Starting, Stopping, & Getting Job Status
 All the sub-commands for managing jobs are available under 'jobs':
 
 #+begin_src
@@ -500,4 +505,4 @@ Job finished, no more output, exiting tail!
 
 As you can see, once a job has stopped =workernator= will exit.
 
-** Security
+*** Security

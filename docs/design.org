@@ -1,0 +1,131 @@
+#+STARTUP: showall expand
+#+options: toc:nil
+#+begin_src yaml :exports results :results value html
+  ---
+  authors: Sean Hagen (sean.hagen@gmail.com)
+  state: draft
+  ---
+#+end_src
+#+TITLE: RFD 78 - Workernator
+
+* What
+A simple, bare-bones worker manager, with a core library, GRPC API, and CLI
+client.
+
+* Why
+To have a worker manager that can use cGroups & namespaces to manage compute
+resources and namespaces for PID, networking, & mount isolation.
+
+* Details
+Right off the bat: this isn't meant to be a generic job-running service. If that
+was what was needed, we could use something like Faktory to host a job
+server. There are also cloud services that provide similar
+functionality. Instead, the library is designed to know what jobs it's able to
+run; including what arguments are required. The main reason for this is that
+this way we get to take full advantage of the type system.
+
+Other job-runner services are built to allow /any/ kind of job to get run they
+have to rely on things like =interface{}/any= or JSON strings to provide data to
+a job when it starts. This is not great; the conversion and manual type checking
+add effort better spent elsewhere, and additionally adds a potential bug-prone
+section to the code.
+
+Also, if we were just going to send JSON-in-a-string then why use GRPC?
+
+As an additional side-benefit, this means that the API ( both the external GRPC
+API and the code-library API ) should provide enough information about what jobs
+are available and what arguments they take. This should help devs rely on their
+IDE auto-completion and documentation tooling rather than a browser -- at least
+that's the hope!
+
+** Library
+The library is made up of two parts; the job manager, and the jobs.
+
+The job manager is the workhorse; it is what launches jobs when a user makes a
+request, keeps track of running jobs, and all the other functionality we
+require.
+
+There are a few things that will be required for the library: a way to *register*
+a job, a way to *start* a job, a way to *stop* a job, a way to get the *status* of a
+job, and lastly a way to *tail the output* of a job.
+
+This is all done with the following types:
+
+#+begin_src go
+  type JobData interface {
+    Name() string
+    Arguments() []string
+  }
+
+  type Interactor interface {
+    Log(string) // prints the string with timestamp & tag
+    Result(any) // prints the result, with timestamp & tag
+    Error(err) // prints out the error, with timestamp & tag
+  }
+
+  type JobFunction func(JobData,Interactor) error
+
+  type Job struct {
+    Name string
+    Run  JobFunction
+  }
+#+end_src
+
+    Worker library with methods to start/stop/query status and get the output of a job.
+    Library should be able to stream the output of a running job.
+        Output should be from start of process execution.
+        Multiple concurrent clients should be supported.
+    Add resource control for CPU, Memory and Disk IO per job using cgroups.
+    Add resource isolation for using PID, mount, and networking namespaces.
+
+*** Registering Jobs
+The library will provide a function that can be used to register a job function:
+
+#+begin_src go
+  func (l *Library) RegisterJobber(job Job) error {
+    // registers the job so that it can be run later
+    l.jobs[job.Name] = job.Run
+  }
+#+end_src
+
+The =Job= struct should contain the name of the job that will be used later when
+starting a job; =JobFunction= is the "worker" ( cause it does the actual work! ).
+
+*** Starting Jobs
+There are a few steps involved in launching a job.
+
+The first step is running the same =workernator= binary, but with different
+arguments. This is done automatically by =workernator=, don't worry! This is done
+to set up the namespaces so that we've got some resource isolation.
+
+When the binary runs, it is now in "namespaced" mode. The next step is setting
+up the cgroups, and handling the rest of the setup ( mounting =proc=, pivoting the
+root file system, etc ). The last part of this step is running the =workernator=
+binary one last time.
+
+Now the binary is ready to run the job worker function. All the arguments are
+passed to the function via the command line arguments, but the job function
+doesn't need to worry about that. Part of the code that wraps up the function
+will take care of gathering up the command line arguments -- minus the first
+three arguments. It does this because at this point the first three arguments
+will be =/proc/self/exe=, =runner=, and the name set in the =Job= struct passed into
+=RegisterJobber=.
+
+The library keeps a hold of the =*exec.Cmd= it creates when starting the process
+of launching a job so that it can be used to kill a job process later if
+required.
+
+*** Stopping Jobs
+*** Querying Job Status
+*** Get Job Output
+**** Storing Job Output
+**** Concurrency
+** API
+    GRPC API to start/stop/get status/stream output of a running process.
+    Use mTLS authentication and verify client certificate. Set up strong set of cipher suites for TLS and good crypto setup for certificates. Do not use any other authentication protocols on top of mTLS.
+    Use a simple authorization scheme.
+*** GRPC API Definition
+*** Authentication
+*** Authorization
+** Command-Line Client
+** Security

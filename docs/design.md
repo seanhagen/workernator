@@ -373,11 +373,11 @@ And tailing the output is similarly easy:
 
 ```
 # workernator jobs tail XE38YM
-[JOB] Starting job 'Fibonacci'
-[FIB] Calculating the value of the 3rd value in the Fibonacci sequence
-[FIB] Using lookup; value is '1'.
-[RESULT] 1
-[JOB] Complete
+2022-07-07 12:34:54 [JOB] Starting job 'Fibonacci'
+2022-07-07 12:34:55 [FIB] Calculating the value of the 3rd value in the Fibonacci sequence
+2022-07-07 12:34:55 [FIB] Using lookup; value is '1'.
+2022-07-07 12:34:55 [RESULT] 1
+2022-07-07 12:34:56 [JOB] Complete
 
 Job finished, no more output, exiting tail!
 

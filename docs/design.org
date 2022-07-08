@@ -1,8 +1,6 @@
-#+HUGO_BASE_DIR: ./
-#+HUGO_SECTION: ./
 #+STARTUP: showall expand
 #+options: toc:nil
-#+begin_src yaml :exports results :results value html
+#+begin_src yaml :exports results :results value markdown
   ---
   authors: Sean Hagen (sean.hagen@gmail.com)
   state: draft

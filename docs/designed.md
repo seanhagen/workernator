@@ -29,14 +29,30 @@ As an additional side-benefit, this means that the API ( both the external GRPC 
 
 > One note before we dive in: don't treat the names of types, functions, or concepts in this document as "final". I tend to iterate & change names as I work as the "purpose" of a type or function becomes more clear as the code gets fleshed out.
 
+This service will be comprised of three parts:
+
+-   a library that contains all of the job-management stuff
+-   a GRPC API service that is basically a thin wrapper around the library
+-   a GRPC API command-line client that can be used to start, stop, query status, and tail the output of jobs
+
+Also, as this is not meant to be a real-world system (&#x2026;yet?), there are some things that won't be implemented. These kinds of things will get pointed out where relevant.
+
+The list of requirements used to create this design doc can be found [here](https://github.com/gravitational/careers/blob/main/challenges/systems/challenge.md#level-5).
+
 
 ### Library
 
 The library is made up of two parts; the job manager, and the jobs.
 
-The job manager is the workhorse; it is what launches jobs when a user makes a request, keeps track of running jobs, and all the other functionality we require.
+The job manager is the workhorse; it is what launches jobs when a user makes a request, keeps track of running jobs, stops jobs when a user requests, and keeps track of the output so users can request that as well.
 
-There are a few things that will be required for the library: a way to **register** a job, a way to **start** a job, a way to **stop** a job, a way to get the **status** of a job, and lastly a way to **tail the output** of a job.
+So, to break down the core bits of functionality, we're going to need:
+
+-   a way to **register** a job
+-   a way to **start** a job
+-   a way to **stop** a job
+-   a way to get the **status** of a job
+-   a way to **tail the output** of a job
 
 This will be accomplished using some types that will probably look something like this:
 
@@ -76,25 +92,13 @@ The `Job` struct should contain the name of the job that will be used later when
 
 #### Starting Jobs
 
-There are a few steps involved in launching a job.
-
-The first step is running the same `workernator` binary, but with different arguments. This is done automatically by `workernator`, don't worry! This is done to set up the namespaces so that we've got some resource isolation.
-
-When the binary runs, it is now in "namespaced" mode. The next step is setting up the cgroups, and handling the rest of the setup ( mounting `proc`, pivoting the root file system, etc ). The last part of this step is running the `workernator` binary one last time.
-
-Now the binary is ready to run the job worker function. All the arguments are passed to the function via the command line arguments, but the job function doesn't need to worry about that. Part of the code that wraps up the function will take care of gathering up the command line arguments &#x2013; minus the first three arguments. It does this because at this point the first three arguments will be `/proc/self/exe`, `runner`, and the name set in the `Job` struct passed into `RegisterJobber`.
-
-The library keeps a hold of the `*exec.Cmd` it creates when starting the process of launching a job so that it can be used to kill a job process later if required. Additionally, the standard out & standard error fields on the `*exec.Cmd` will be assigned objects that collect the log lines, add metadata, then sends the line to a collector that puts all the lines into a single in-memory buffer.
-
-However, to code using the library to manage jobs, this is all hidden behind this function:
+Another function will be provided so users can start a job and provide any required arguments:
 
 ```go
-StartJob(name string, args JobData) (*JobInfo,error)
+StartJob(name string, args JobData) (JobInfo,error)
 ```
 
-Where the `JobInfo` struct that gets returned contains useful information such as the ID of the job.
-
-An error will be returned only if the data in `args` contains an invalid job, or incorrect arguments for the job.
+The `JobData` type will most likely be a simple-data-object struct that contains the arguments for the job. The `JobInfo` struct that gets returned will have some information about the job such as the ID that's required to stop the job, get it's status, or tail the output. An error will be returned only if the data in `args` contains an invalid job, or incorrect arguments for the job.
 
 
 ##### CGroups & Namespaces - Resource Control and Isolation
@@ -146,11 +150,9 @@ The provided `context.Context` is used for cancellation, as this function will m
 
 If `id` doesn't contain the ID of a job that is currently running or has run in the past, the function will return an error.
 
-`TailJob` expects to be the one to close the `output` channel. If it is closed elsewhere, `TailJob` *will* panic and throw an error.
+`TailJob` expects to be the one to close the `output` channel. Once `TailJob` has read and sent all lines from a job, it closes the channel. This means that as long as the job is running, the channel stays open. If it is closed elsewhere, `TailJob` *will* panic and throw an error &#x2013; cause that's what happens when you try to write to a closed channel in Go!
 
-`OutputLine` is a struct that contains each line of output from a job, with additional metadata such as timestamps.
-
-Once `TailJob` has read and sent all lines from a job, it closes the channel. This means that as long as the job is running, the channel stays open.
+`OutputLine` is a struct that contains each line of output from a job, that may contain additional metadata such as timestamps or log type.
 
 
 ##### Storing Job Output
@@ -171,7 +173,7 @@ Managing when to flush the in-memory buffer so that we're not creating bugs for 
 
 ### API
 
-GRPC API to start/stop/get status/stream output of a running process. Use mTLS authentication and verify client certificate. Set up strong set of cipher suites for TLS and good crypto setup for certificates. Do not use any other authentication protocols on top of mTLS. Use a simple authorization scheme.
+The API is going to use GRPC rather than HTTP, as set out in the challenge requirements.
 
 
 #### GRPC API Definition
@@ -183,7 +185,7 @@ We're not going to go over the entire protobuf definition here, instead we'll co
 
 As part of the definition of a job, each job has a 'type'. This type defines what the job does, as well as what arguments it expects.
 
-In addition to the three pre-defined jobs ( "Fibonacci", "Expression Evaluator", and "Wait Then Send" ), there is also a '0-th' job type: `Noop`. This is because in Go, the default value for a variable with type `JobType` is 0. Rather than have this be the value for an "actual" job, instead this is assigned to a job that does nothing and doesn't print anything. This way, a configuration, programmer, or simple clumsy-fingered mistake won't start the wrong job.
+In addition to the three pre-defined jobs ( "Fibonacci", "Expression Evaluator", and "Wait Then Send" ), there is also a '0-th' job type: `Noop`. This is because in Go, the default value for a variable with type `JobType` is 0. Rather than have this be the value for an "actual" job, instead this is assigned to a job that does nothing and doesn't print anything. This way a configuration error, programmer flub, or simple clumsy-fingered mistake won't start the wrong job.
 
 
 ##### Job Request Messages
@@ -210,32 +212,32 @@ For example, what happens if we want to add a timeout field to the request we se
 
 Each of these would require one of two things. Either the `JobId` message gets overloaded to the point of being nearly useless &#x2013; or each method gets its own message type.
 
-This is the route I chose, as I can see lots of potential functionality requiring expanding each of the request messages for `Stop`, `Status`, and `Tail`.
+I decided to just go with each method getting it's own type. It might be redundant right now, but it gives each method control over what it accepts without causing breaking API changes later on down the line. Also, I can already see lots of potential functionality requiring expanding each of the request messages for `Stop`, `Status`, and `Tail`.
 
 
 ##### The "Arguments" Message Type
 
-Not a lot to say about this one, but just in case you were curious: this message type is here so that there's no chance that the `args` field in the `Job` message type and the `args` field in the `JobStartRequest` message type don't accidentally diverge.
+Not a lot to say about this one, but just in case you were curious: this message type is here so that there's no chance that the `args` field in the `Job` message type and the `args` field in the `JobStartRequest` message type accidentally start diverging.
 
 
 ##### Separate Folders
 
 This one is mostly a personal preference thing, but I prefer to keep the protobuf definition files separate from the code generated from those files. This is mostly so that if there's a need to generate code for other languages that there's already a clear pattern as to how that should work and where files should go.
 
+Additionally, I prefer to keep the Go code generated from the protobuf definition in `internal`. The main reason is that if there is a need for outside developers ( either external to my team or external to the company ) need to build their own clients I'd rather give them a more thoughtfully designed API than what GRPC usually generates.
+
+Also, this ensures that things like mTLS don't get forgotten. This is because I'm able to design the client SDK/API/whatever so that stuff like "provide a client mTLS certificate here" really explicit and hard to miss.
+
+Lastly, it also allows me to wrap some of the GRPC weirdness in a more "Go-like" wrapper. The best example is streaming API methods that can be presented as a method on the client struct that takes or produces a channel. For example, using the streaming API you can write methods that allow you to upload files &#x2013; but it's much nicer to provide an API client that fulfills the `io.Writer`, `io.Reader`, and `io.Closer` interfaces so that your API slots seamlessly into code that already uses those interfaces.
+
 
 #### Authentication
 
 The GRPC service will use mTLS for authentication. A unique certificate will be generated for each client.
 
-The server and client libraries will be configured to use TLS v1.3, with only these two ciphers:
+The server and client libraries will be configured to use TLS v1.3. Starting in Go 1.17, when TLS v1.3 is chosen while configuring TLS you are not able to select the cipher suite. [This is because this decision isn't easy, and many devs often get it wrong &#x2013; so the Go team has gone with a sensible & secure default.](https://tip.golang.org/blog/tls-cipher-suites)
 
--   `tls.TLS_CHACHA20_POLY1305_SHA256`
--   `tls.TLS_AES_128_GCM_SHA256`
-
-
-##### NOTE: Clarification Required
-
-Ask for more detail on what they mean by "good crypto setup for certificates".
+The exact suite of ciphers used may depend on what hardware is available at runtime, as certain ciphers are only used when *both* sides have the appropriate hardware &#x2013; see AES-GCM, for example.
 
 
 #### Authorization
@@ -265,14 +267,14 @@ Using this basically as intended, putting 'Teleport' as the value.
 
 **Key:** OU
 
-I'm putting `workernator`, with the idea that this could be used to put the name of the service the certificate is meant to be used with.
+I'm defaulting to `workernator`, with the idea that this field could be used for the name of the service the certificate is meant to be used with.
 
 
 ###### Common Name
 
 **Key:** CN
 
-Typically used for the name of the person "responsible" for the TLS certificate on the server, we're using it to identify whether the certificate is meant to be used by a server or a client. Handy for when things get mis-named!
+Typically used for the name of the person "responsible" for the TLS certificate on the server, we're using it to identify whether the certificate is meant to be used by a server or a client. Handy for when things get mis-named and you forget which is which! It also means that users can't set up their own server if they get their hands on the code; they still need a proper 'server' certificate.
 
 
 ###### Locality Name
@@ -288,7 +290,9 @@ Here we're going to use it to identify the user making a request. This will be u
 
 The **O**, **ON**, and **CN** keys are the "core" keys, and should be present regardless of whether the certificate is meant to be used by a server or a client. Both clients and servers will use those three keys when validating a certificate.
 
-As for the **L** key, only the servers will pay attention and use that key. Clients will ignore this key if it's in a server certificate.
+As for the **L** key, only the servers will pay attention and use that key. Clients will ignore this key if it's in a server certificate. This opens up the possibility of using the **L** key for something else later, but that is outside the scope of this project so we're just going to leave it at that.
+
+For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but it's outside the scope of this exercise.
 
 
 ### Command-Line Client

@@ -7,7 +7,8 @@ import "google/protobuf/timestamp.proto";
 // JobType contains the types of jobs that can be started. 
 enum JobType {
   // Noop doesn't take any arguments, because it doesn't do
-  // anything. See `docs/design.md` for more.
+  // anything. The 'default' job, so that accidental invocations of
+  // the Noop job won't use resources.
   Noop = 0;
 
   // Fibonacci takes one argument, an int named 'fib'. That is the
@@ -94,14 +95,10 @@ message Job {
 }
 
 
-// JobStatusRequest is used to request the status of a job.
-message JobStatusRequest {
-  string id = 1;
-}
-
-// JobStatusResponse returns the Job, if found.
-message JobStatusResponse {
-  Job job = 1;
+// JobStartRequest is sent to request a job be started in the service.
+message JobStartRequest {
+  JobType job_type = 1;
+  Arguments args = 2;
 }
 
 // JobStopRequest is sent to 'Stop' to request a job be stopped
@@ -110,10 +107,14 @@ message JobStopRequest {
   string id = 1;
 }
 
-// JobStartRequest is sent to request a job be started in the service.
-message JobStartRequest {
-  JobType job_type = 1;
-  Arguments args = 2;
+// JobStatusRequest is used to request the status of a job.
+message JobStatusRequest {
+  string id = 1;
+}
+
+// JobStatusResponse returns the Job, if found.
+message JobStatusResponse {
+  Job job = 1;
 }
 
 // TailJobRequest is sent to the 'Tail' method to specify job output
@@ -143,15 +144,22 @@ service Service {
   // does not take into account what the job may be doing at any
   // particular moment. This method will wait until the job has been
   // sucesfully stopped before returning.
+  //
+  // Will return an error if the ID provided doesn't map to any known
+  // jobs.
   rpc Stop(JobStopRequest) returns (Job){}
 
   // Status returns the current status of any job known to the
-  // service. This uses the more generic 'Id' message instead of a
-  // more tailored 'JobStatusRequest' message because this method is
-  // just a straight-forward lookup-by-id. 
+  // service.
+  //
+  // Will return an error if the ID provided doesn't map to any known
+  // jobs.
   rpc Status(JobStatusRequest) returns (Job) {}
 
   // Tail returns a stream of log lines from the job. It always
-  // returns the full log from the beginning of job execution.
+  // returns the full log from the beginning of job execution. 
+  //
+  // Will return an error if the ID provided doesn't map to any known
+  // jobs.
   rpc Tail(TailJobRequest) returns (stream TailJobResponse){}
 }

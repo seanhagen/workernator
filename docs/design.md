@@ -333,35 +333,18 @@ The client certificate that is generated will contain a few subjects with slight
 
 Below is each subject key, the 'proper' name, and what we're using it for ( if we're using it differently than the name would suggest ).
 
-| Key | Name                     | Using For                                                          |
-|--- |------------------------ |------------------------------------------------------------------ |
-| O   | Organization Name        | Using this basically as intended, putting 'Teleport' as the value. |
-| OU  | Organizational Unit Name | See note 1 below                                                   |
-| CN  | Common Name              | See note 2 below                                                   |
-| L   | Locality Name            | See note 3 below                                                   |
+| Key | Name                     | Using For                                                                                                                                                                                                                                                                                                                                                                                                    |
+|--- |------------------------ |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| O   | Organization Name        | Using this basically as intended, putting 'Teleport' as the value.                                                                                                                                                                                                                                                                                                                                           |
+| OU  | Organizational Unit Name | I'm defaulting to `workernator`, with the idea that this field could be used for the name of the service the certificate is meant to be used with.                                                                                                                                                                                                                                                           |
+| CN  | Common Name              | Typically used for the name of the person "responsible" for the TLS certificate on the server, we're using it to identify whether the certificate is meant to be used by a server or a client. Handy for when things get mis-named and you forget which is which! It also means that users can't set up their own server if they get their hands on the code; they still need a proper 'server' certificate. |
+| L   | Locality Name            | This is normally used to name the city or local region where the server or server admin is located. Here we're going to use it to identify the user making a request. This will be used to look up what permissions and abilities the user has.                                                                                                                                                              |
 
 The **O**, **ON**, and **CN** keys are the "core" keys, and should be present regardless of whether the certificate is meant to be used by a server or a client. Both clients and servers will use those three keys when validating a certificate.
 
 As for the **L** key, only the servers will pay attention and use that key. Clients will ignore this key if it's in a server certificate. This opens up the possibility of using the **L** key for something else later, but that is outside the scope of this project so we're just going to leave it at that.
 
 For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but it's outside the scope of this exercise.
-
-
-##### Note 1
-
-I'm defaulting to `workernator`, with the idea that this field could be used for the name of the service the certificate is meant to be used with.
-
-
-##### Note 2
-
-Typically used for the name of the person "responsible" for the TLS certificate on the server, we're using it to identify whether the certificate is meant to be used by a server or a client. Handy for when things get mis-named and you forget which is which! It also means that users can't set up their own server if they get their hands on the code; they still need a proper 'server' certificate.
-
-
-##### Note 3
-
-This is normally used to name the city or local region where the server or server admin is located.
-
-Here we're going to use it to identify the user making a request. This will be used to look up what permissions and abilities the user has.
 
 
 ### Command-Line Client

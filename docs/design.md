@@ -193,7 +193,9 @@ There are two potential messages that each of `Stop`, `Status`, and `Tail` could
 -   a generic `Id` message that simply contained the job ID, OR
 -   a method-specific message that contains the job ID
 
-The first variation is a bit nicer; instead of three different message types that contain the same data you just have one. So you'd get this:
+The first variation is a bit nicer; instead of three different message types that contain the same data you just have one.
+
+So you'd get this:
 
 ```protobuf
 service Service {
@@ -204,18 +206,39 @@ service Service {
 }
 ```
 
-However, there is a somewhat large drawback to this.
+Instead of this:
 
-For example, what happens if we want to add a timeout field to the request we send to `Stop`? Or if we want `Status` to additionally return all of the current log lines for the job? Maybe we want to be able to have `Tail` only start from the most recent message and then continue from there &#x2013; or to only show the last N log lines.
+```protobuf
+service Service {
+  rpc Start(JobStartRequest) returns (Job){}
+  rpc Stop(JobStopRequest) returns (Job){}
+  rpc Status(JobStatusRequest) returns (Job) {}
+  rpc Tail(JobTailRequest) returns (stream TailJobResponse){}
+}
+```
+
+However, there is a somewhat large drawback to this &#x2013; we'd always be risking backwards compatibility.
+
+Take a look at the following potential feature requests we could get for this service:
+
+-   add a timeout field to the message sent to `Stop`, so that users can define a grace period before the job is killed
+-   add a way to stop jobs that have been running for longer than N seconds
+-   add a flag to the message sent to `Status` that includes all current log lines
+-   add a boolean flag to the message sent to `Status` that controls the verbosity of what's returned ( optionally showing things like memory usage, bytes sent/received over the network, etc )
+-   add a flag to the message sent to `Tail` so it doesn't output past messages, just new ones
+-   add a flag to the message sent to `Tail` so it only prints the last N lines of output before continuing with live messages
+-   allow `Tail` to return log messages by job *type*, instead of just specific jobs
 
 Each of these would require one of two things. Either the `JobId` message gets overloaded to the point of being nearly useless &#x2013; or each method gets its own message type.
 
-I decided to just go with each method getting it's own type. It might be redundant right now, but it gives each method control over what it accepts without causing breaking API changes later on down the line. Also, I can already see lots of potential functionality requiring expanding each of the request messages for `Stop`, `Status`, and `Tail`.
+I decided to just go with each method getting it's own type. It might be redundant right now, but it gives each method control over what it accepts without causing breaking API changes later on down the line.
 
 
 ##### The "Arguments" Message Type
 
-Not a lot to say about this one, but just in case you were curious: this message type is here so that there's no chance that the `args` field in the `Job` message type and the `args` field in the `JobStartRequest` message type accidentally start diverging.
+Not a lot to say about this one, but just in case you were curious: this message type is here so that there's no chance that the `args` field in the `Job` message type and the `args` field in the `JobStartRequest` message type start diverging.
+
+Don't want to be able to start a job but not see the arguments you sent when getting the status!
 
 
 ##### Separate Folders
@@ -224,9 +247,65 @@ This one is mostly a personal preference thing, but I prefer to keep the protobu
 
 Additionally, I prefer to keep the Go code generated from the protobuf definition in `internal`. The main reason is that if there is a need for outside developers ( either external to my team or external to the company ) need to build their own clients I'd rather give them a more thoughtfully designed API than what GRPC usually generates.
 
-Also, this ensures that things like mTLS don't get forgotten. This is because I'm able to design the client SDK/API/whatever so that stuff like "provide a client mTLS certificate here" really explicit and hard to miss.
+Also, this ensures that things like mTLS don't get forgotten. This is because I'm able to design the client SDK/API/whatever so that stuff like "provide a client mTLS certificate here" really explicit and hard to miss. Also, it allows us to wrap any potentially "generic" error messages with ones that are hopefully more useful.
 
-Lastly, it also allows me to wrap some of the GRPC weirdness in a more "Go-like" wrapper. The best example is streaming API methods that can be presented as a method on the client struct that takes or produces a channel. For example, using the streaming API you can write methods that allow you to upload files &#x2013; but it's much nicer to provide an API client that fulfills the `io.Writer`, `io.Reader`, and `io.Closer` interfaces so that your API slots seamlessly into code that already uses those interfaces.
+Lastly, it also allows me to wrap some of the GRPC weirdness in a more "Go-like" wrapper. The best example of this would be an API method meant to allow file downloading.
+
+In "pure GRPC", that'd look something like this:
+
+```go
+f, err := os.OpenFile(OUTPUT_PATH, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+if err != nil {
+  log.Fatalf("unable to open output file: %v", err)
+}
+
+conn, err := grpc.Dial(":50005", grpc.WithCredentialsBundle(bundle))
+if err != nil {
+  log.Fatalf("can not connect with server %v", err)
+}
+
+// create stream
+client := pb.NewStreamServiceClient(conn)
+in := &pb.Request{Id: 1}
+stream, err := client.FetchResponse(context.Background(), in)
+if err != nil {
+  log.Fatalf("open stream error %v", err)
+}
+
+for {
+  resp, err := stream.Recv()
+  if err == io.EOF {
+    break
+  }
+  if err != nil {
+    log.Fatalf("cannot receive %v", err)
+  }
+
+  _, err = f.Write(resp.FileBytes)
+  if err != nil {
+    log.Fatalf("unable to write to file: %v", err)
+  }
+}
+```
+
+But isn't this much nicer?
+
+```go
+f, err := os.OpenFile(OUTPUT_PATH, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+if err != nil {
+  log.Fatalf("unable to open output file: %v", err)
+}
+
+client, err := file_client.New(":50005")
+if err != nil {
+  log.Fatalf("unable to create file upload client: %v", err)
+}
+
+err = client.DownloadTo(f, 1)
+if err != nil {
+  log.Fatalf("unable to download file: %v", err)
+}
+```
 
 
 #### Authentication

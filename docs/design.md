@@ -46,46 +46,10 @@ The job manager is the workhorse; it is what launches jobs when a user makes a r
 
 So, to break down the core bits of functionality, we're going to need:
 
--   a way to **register** a job
 -   a way to **start** a job
 -   a way to **stop** a job
 -   a way to get the **status** of a job
 -   a way to **tail the output** of a job
-
-This will be accomplished using some types that will probably look something like this:
-
-```go
-// Interactor allows a job to create output logs, log the results of a job, or report an error
-// in the format expected by the job manager so it can parse the logs properly.
-type Interactor interface {
-  Log(string) // prints the string with timestamp & tag
-  Result(any) // prints the result, with timestamp & tag
-  Error(err) // prints out the error, with timestamp & tag
-}
-
-// JobData contains 
-type JobData struct {
-  Arguments []string
-}
-
-type JobFunction func(JobData,Interactor) error
-
-type Job struct {
-  Name string
-  Run  JobFunction
-}
-```
-
-
-#### Registering Jobs
-
-The library will provide a function that can be used to register a job function:
-
-```go
-RegisterJob(job Job) error
-```
-
-The `Job` struct should contain the name of the job that will be used later when starting a job; the `JobFunction` function is the actual "worker".
 
 
 #### Starting Jobs
@@ -344,7 +308,7 @@ The **O**, **ON**, and **CN** keys are the "core" keys, and should be present re
 
 As for the **L** key, only the servers will pay attention and use that key. Clients will ignore this key if it's in a server certificate. This opens up the possibility of using the **L** key for something else later, but that is outside the scope of this project so we're just going to leave it at that.
 
-For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but it's outside the scope of this exercise.
+For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but this is also outside the scope of this exercise so we won't be doing it.
 
 
 ### Command-Line Client
@@ -468,6 +432,3 @@ Job finished, no more output, exiting tail!
 ```
 
 As you can see, once a job has stopped `workernator` will exit.
-
-
-### Security

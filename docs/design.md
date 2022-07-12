@@ -19,7 +19,7 @@ To have a worker manager that can use cGroups & namespaces to manage compute res
 
 ## Details
 
-Right off the bat: this isn't meant to be a generic job-running service. If that was what was needed, we could use something like Faktory to host a job server. There are also cloud services that provide similar functionality. Instead, the library is designed to know what jobs it's able to run; including what arguments are required. The main reason for this is that this way we get to take full advantage of the type system.
+Right off the bat: this isn't meant to be a generic job-running service. If that was what was needed, we could use something like Faktory to host a job server. There are also cloud services that provide similar functionality. Instead, the library is designed to know what jobs it's able to run; including what arguments are required. The main reason for this is that this way we get to take full advantage of Go's static typing so that we can catch certain kinds of errors or bugs at compile time, instead of runtime!
 
 Other job-runner services are built to allow *any* kind of job arguments, which means often relying on `interface{}/any` or JSON strings to provide data to a job when it starts. This is not great; the conversion and manual type checking add effort better spent elsewhere, and additionally adds a potential bug-prone section to the code.
 

@@ -19,13 +19,10 @@ To have a worker manager that can use cGroups & namespaces to manage compute res
 
 ## Details
 
-Right off the bat: this isn't meant to be a generic job-running service. If that was what was needed, we could use something like Faktory to host a job server. There are also cloud services that provide similar functionality. Instead, the library is designed to know what jobs it's able to run; including what arguments are required. The main reason for this is that this way we get to take full advantage of Go's static typing so that we can catch certain kinds of errors or bugs at compile time, instead of runtime!
+First thing: this library is going to be designed with the idea that what jobs can be executed ( including any required arguments ) will be part of the API of the library & service. This is mostly for type-checking, but for a few other reasons too:
 
-Other job-runner services are built to allow *any* kind of job arguments, which means often relying on `interface{}/any` or JSON strings to provide data to a job when it starts. This is not great; the conversion and manual type checking adds effort and uses more server resources, and also additionally adds a potentially bug-prone section to the code.
-
-Also, if we were just going to send JSON-in-a-string &#x2013; why use GRPC? Let's take advantage of all that type checking goodness.
-
-As an additional side-benefit, this means that the API ( both the external GRPC API and the code-library API ) should provide enough information about what jobs are available and what arguments they take. This should help devs rely on their IDE auto-completion and documentation tooling rather than a browser &#x2013; at least that's the hope!
+-   no JSON! Part of this is a web-facing service, use GRPC instead of stuffing JSON into string fields in the messages!
+-   API is hopefully easier to use, as it's closer to being truly self-documenting
 
 This service will be comprised of three parts:
 

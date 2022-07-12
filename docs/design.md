@@ -85,7 +85,7 @@ The library will provide a function that can be used to register a job function:
 RegisterJob(job Job) error
 ```
 
-The `Job` struct should contain the name of the job that will be used later when starting a job; the `JobFunction` function is the "worker" ( cause it does the actual work! ).
+The `Job` struct should contain the name of the job that will be used later when starting a job; the `JobFunction` function is the actual "worker".
 
 
 #### Starting Jobs
@@ -105,7 +105,7 @@ When starting a job, `workernator` does more than just launch a goroutine and ca
 
 Using the namespaces & cgroups built into modern Linux kernels, we're able to build something similar to a Docker container that the job runs inside. This is accomplished using the methods detailed in [this series of articles](https://medium.com/@teddyking/linux-namespaces-850489d3ccf) and also in [this article](https://www.infoq.com/articles/build-a-container-golang/).
 
-Basically, this method boils down to using the special file `/proc/self/exe` which is a special link that points to the currently running binary. By using `exec.Command` from the [exec package](https://pkg.go.dev/os/exec) we can re-run the `workernator` binary with special arguments that enable the creation of new namespaces. This is also what allows us to configure cgroups so that we can limit the amount of available RAM or CPU to a running job.
+Basically, this method boils down to using the special file `/proc/self/exe` which is a special link that points to the currently running binary. By using `exec.Command` from the [exec package](https://pkg.go.dev/os/exec) we can re-run the `workernator` binary with special arguments that tell the OS to run the binary in a new namespace for resource isolation. This also allows us to configure cgroups for resource management.
 
 
 #### Stopping Jobs

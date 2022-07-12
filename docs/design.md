@@ -176,7 +176,7 @@ The API is going to use GRPC rather than HTTP, as set out in the challenge requi
 
 #### GRPC API Definition
 
-We're not going to go over the entire protobuf definition here, instead we'll cover some of the design decisions so we're all on the same page. However, please do check out [workernator.proto](file:///proto/workernator.proto) to see the entire protobuf definition.
+We're not going to go over the entire protobuf definition here, instead we'll cover some of the design decisions so we're all on the same page. However, please do check out [workernator.proto](../proto/workernator.proto) to see the entire protobuf definition.
 
 
 ##### Job Type

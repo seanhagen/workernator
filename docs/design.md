@@ -193,9 +193,7 @@ There are two potential messages that each of `Stop`, `Status`, and `Tail` could
 -   a generic `Id` message that simply contained the job ID, OR
 -   a method-specific message that contains the job ID
 
-The first variation is a bit nicer; instead of three different message types that contain the same data you just have one.
-
-So you'd get this:
+The first variation is a bit nicer; instead of three different message types that contain the same data you just have one:
 
 ```protobuf
 service Service {
@@ -206,7 +204,7 @@ service Service {
 }
 ```
 
-Instead of this:
+The second variation looks like this:
 
 ```protobuf
 service Service {
@@ -217,7 +215,7 @@ service Service {
 }
 ```
 
-However, there is a somewhat large drawback to this &#x2013; we'd always be risking backwards compatibility.
+There is a downside to the first version: we'd always be risking backwards compatibility.
 
 Take a look at the following potential feature requests we could get for this service:
 
@@ -229,9 +227,9 @@ Take a look at the following potential feature requests we could get for this se
 -   add a flag to the message sent to `Tail` so it only prints the last N lines of output before continuing with live messages
 -   allow `Tail` to return log messages by job *type*, instead of just specific jobs
 
-Each of these would require one of two things. Either the `JobId` message gets overloaded to the point of being nearly useless &#x2013; or each method gets its own message type.
+Each of these would require one of two things. Either the `JobId` message gets overloaded to the point of being nearly useless &#x2013; or each method gets its own message type. Switching the message type a method takes is not backwards compatible in GRPC, but changing the fields of a message is.
 
-I decided to just go with each method getting it's own type. It might be redundant right now, but it gives each method control over what it accepts without causing breaking API changes later on down the line.
+I decided that instead of overloading a `JobId` message type with fields specific to each of the routes, we'll start with each API method having it's own unique argument message type.
 
 
 ##### The "Arguments" Message Type

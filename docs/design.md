@@ -127,9 +127,9 @@ We're not going to go over the entire protobuf definition here, instead we'll co
 
 ##### Job Type
 
-As part of the definition of a job, each job has a 'type'. This type defines what the job does, as well as what arguments it expects.
+Part of the GRPC definition includes the `JobType` enum. This is used as part of creating a job, so that the service knows which set of arguments to use.
 
-In addition to the three pre-defined jobs ( "Fibonacci", "Expression Evaluator", and "Wait Then Send" ), there is also a '0-th' job type: `Noop`. This is because in Go, the default value for a variable with type `JobType` is 0. Rather than have this be the value for an "actual" job, instead this is assigned to a job that does nothing and doesn't print anything. This way a configuration error, programmer flub, or simple clumsy-fingered mistake won't start the wrong job.
+Because of how GRPC enum types work in Go, the default value for `JobType` is `Noop`. This will be a job that does nothing; it won't even attempt to do any of the cgroup or namespace stuff. This way a configuration error, programmer flub, or simple clumsy-fingered mistake won't start the wrong job.
 
 
 ##### Job Request Messages
@@ -193,7 +193,11 @@ Additionally, I prefer to keep the Go code generated from the protobuf definitio
 
 Also, this ensures that things like mTLS don't get forgotten. This is because I'm able to design the client SDK/API/whatever so that stuff like "provide a client mTLS certificate here" really explicit and hard to miss. Also, it allows us to wrap any potentially "generic" error messages with ones that are hopefully more useful.
 
-Lastly, it also allows me to wrap some of the GRPC weirdness in a more "Go-like" wrapper. The best example of this would be an API method meant to allow file downloading.
+Lastly, it also allows me to wrap some of the GRPC-specific weirdness in a more "Go-like" wrapper. For example, take a GRPC service that defines a method like this:
+
+```protobuf
+DownloadFile(stream FilePart) returns (FileInfo) {}
+```
 
 In "pure GRPC", that'd look something like this:
 
@@ -213,7 +217,7 @@ if err != nil {
 // create stream
 client := pb.NewStreamServiceClient(conn)
 in := &pb.Request{Id: 1}
-stream, err := client.FetchResponse(ctx), in)
+stream, err := client.DownloadFile(ctx, in)
 if err != nil {
   log.Fatalf("open stream error %v", err)
 }

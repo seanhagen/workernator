@@ -164,9 +164,9 @@ For a real-world service, we'd have to look into flushing the output to a file o
 
 ##### Concurrency
 
-The library will support multiple clients requesting the output of a single job at once. The hard part for getting the output logs concurrently would probably actually be determining when to free the buffer used to store the output, rather than the mechanism to allow multiple clients to read concurrently. This is because the actual "read from a file" part would pretty much just feed data into the same mechanism used by clients to get the output of a job while it's running.
+The library will support multiple processes requesting the output of a single job at once. When a process calls the `TailJob` function, it will first send all of the `OutputLine` objects stored in the buffer before then switching over to "live" messages.
 
-Managing when to flush the in-memory buffer so that we're not creating bugs for currently connected clients, and also doing so in a way that avoids deadlocks or resource contention *feels* tricky. Then again, Go has made lots of concurrency stuff I never thought I'd even understand pretty straightforward to use, so this may be something where the scope changes drastically as actual code starts getting written. However, as we're sticking with simple and small scope, the library will simply keep all the output in memory for now.
+There may be some trickiness in managing that switch-over, but this will definitely be covered by unit tests to ensure it's working properly.
 
 
 ### API

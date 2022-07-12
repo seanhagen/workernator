@@ -199,7 +199,7 @@ Lastly, it also allows me to wrap some of the GRPC-specific weirdness in a more 
 DownloadFile(stream FilePart) returns (FileInfo) {}
 ```
 
-In "pure GRPC", that'd look something like this:
+If we just export the GRPC-generated code, this is what users would have to do in order to use our 'download file' method:
 
 ```go
 // create handle for output file

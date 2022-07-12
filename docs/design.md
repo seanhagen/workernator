@@ -21,7 +21,7 @@ To have a worker manager that can use cGroups & namespaces to manage compute res
 
 Right off the bat: this isn't meant to be a generic job-running service. If that was what was needed, we could use something like Faktory to host a job server. There are also cloud services that provide similar functionality. Instead, the library is designed to know what jobs it's able to run; including what arguments are required. The main reason for this is that this way we get to take full advantage of Go's static typing so that we can catch certain kinds of errors or bugs at compile time, instead of runtime!
 
-Other job-runner services are built to allow *any* kind of job arguments, which means often relying on `interface{}/any` or JSON strings to provide data to a job when it starts. This is not great; the conversion and manual type checking add effort better spent elsewhere, and additionally adds a potential bug-prone section to the code.
+Other job-runner services are built to allow *any* kind of job arguments, which means often relying on `interface{}/any` or JSON strings to provide data to a job when it starts. This is not great; the conversion and manual type checking adds effort and uses more server resources, and also additionally adds a potentially bug-prone section to the code.
 
 Also, if we were just going to send JSON-in-a-string &#x2013; why use GRPC? Let's take advantage of all that type checking goodness.
 
@@ -252,11 +252,13 @@ Lastly, it also allows me to wrap some of the GRPC weirdness in a more "Go-like"
 In "pure GRPC", that'd look something like this:
 
 ```go
+// create handle for output file
 f, err := os.OpenFile(OUTPUT_PATH, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 if err != nil {
   log.Fatalf("unable to open output file: %v", err)
 }
 
+// dial the grpc server
 conn, err := grpc.Dial(":50005", grpc.WithCredentialsBundle(bundle))
 if err != nil {
   log.Fatalf("can not connect with server %v", err)
@@ -265,11 +267,12 @@ if err != nil {
 // create stream
 client := pb.NewStreamServiceClient(conn)
 in := &pb.Request{Id: 1}
-stream, err := client.FetchResponse(context.Background(), in)
+stream, err := client.FetchResponse(ctx), in)
 if err != nil {
   log.Fatalf("open stream error %v", err)
 }
 
+// read all the bytes
 for {
   resp, err := stream.Recv()
   if err == io.EOF {
@@ -289,17 +292,20 @@ for {
 But isn't this much nicer?
 
 ```go
+// create handle for output file
 f, err := os.OpenFile(OUTPUT_PATH, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 if err != nil {
   log.Fatalf("unable to open output file: %v", err)
 }
 
+// create client, pointed at the right server
 client, err := file_client.New(":50005")
 if err != nil {
   log.Fatalf("unable to create file upload client: %v", err)
 }
 
-err = client.DownloadTo(f, 1)
+// download file ID 1 to our file
+err = client.DownloadTo(ctx, f, 1)
 if err != nil {
   log.Fatalf("unable to download file: %v", err)
 }
@@ -327,47 +333,35 @@ The client certificate that is generated will contain a few subjects with slight
 
 Below is each subject key, the 'proper' name, and what we're using it for ( if we're using it differently than the name would suggest ).
 
-
-##### Keys
-
-
-###### Organization Name
-
-**Key:** O
-
-Using this basically as intended, putting 'Teleport' as the value.
-
-
-###### Organizational Unit Name
-
-**Key:** OU
-
-I'm defaulting to `workernator`, with the idea that this field could be used for the name of the service the certificate is meant to be used with.
-
-
-###### Common Name
-
-**Key:** CN
-
-Typically used for the name of the person "responsible" for the TLS certificate on the server, we're using it to identify whether the certificate is meant to be used by a server or a client. Handy for when things get mis-named and you forget which is which! It also means that users can't set up their own server if they get their hands on the code; they still need a proper 'server' certificate.
-
-
-###### Locality Name
-
-**Key:** L
-
-This is normally used to name the city or local region where the server or server admin is located.
-
-Here we're going to use it to identify the user making a request. This will be used to look up what permissions and abilities the user has.
-
-
-##### Usage
+| Key | Name                     | Using For                                                          |
+|--- |------------------------ |------------------------------------------------------------------ |
+| O   | Organization Name        | Using this basically as intended, putting 'Teleport' as the value. |
+| OU  | Organizational Unit Name | See note 1 below                                                   |
+| CN  | Common Name              | See note 2 below                                                   |
+| L   | Locality Name            | See note 3 below                                                   |
 
 The **O**, **ON**, and **CN** keys are the "core" keys, and should be present regardless of whether the certificate is meant to be used by a server or a client. Both clients and servers will use those three keys when validating a certificate.
 
 As for the **L** key, only the servers will pay attention and use that key. Clients will ignore this key if it's in a server certificate. This opens up the possibility of using the **L** key for something else later, but that is outside the scope of this project so we're just going to leave it at that.
 
 For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but it's outside the scope of this exercise.
+
+
+##### Note 1
+
+I'm defaulting to `workernator`, with the idea that this field could be used for the name of the service the certificate is meant to be used with.
+
+
+##### Note 2
+
+Typically used for the name of the person "responsible" for the TLS certificate on the server, we're using it to identify whether the certificate is meant to be used by a server or a client. Handy for when things get mis-named and you forget which is which! It also means that users can't set up their own server if they get their hands on the code; they still need a proper 'server' certificate.
+
+
+##### Note 3
+
+This is normally used to name the city or local region where the server or server admin is located.
+
+Here we're going to use it to identify the user making a request. This will be used to look up what permissions and abilities the user has.
 
 
 ### Command-Line Client

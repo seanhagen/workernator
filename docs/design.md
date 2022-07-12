@@ -27,15 +27,13 @@ Also, if we were just going to send JSON-in-a-string &#x2013; why use GRPC? Let'
 
 As an additional side-benefit, this means that the API ( both the external GRPC API and the code-library API ) should provide enough information about what jobs are available and what arguments they take. This should help devs rely on their IDE auto-completion and documentation tooling rather than a browser &#x2013; at least that's the hope!
 
-> One note before we dive in: don't treat the names of types, functions, or concepts in this document as "final". I tend to iterate & change names as I work as the "purpose" of a type or function becomes more clear as the code gets fleshed out.
-
 This service will be comprised of three parts:
 
 -   a library that contains all of the job-management stuff
 -   a GRPC API service that is basically a thin wrapper around the library
 -   a GRPC API command-line client that can be used to start, stop, query status, and tail the output of jobs
 
-Also, as this is not meant to be a real-world system (&#x2026;yet?), there are some things that won't be implemented. These kinds of things will get pointed out where relevant.
+Also, as this is not meant to be a real-world system (&#x2026;yet?), there are some things that won't be implemented. These kinds of things will get pointed out where relevant, but will mostly have to do with pointing out features that won't be implemented because of scope.
 
 The list of requirements used to create this design doc can be found [here](https://github.com/gravitational/careers/blob/main/challenges/systems/challenge.md#level-5).
 

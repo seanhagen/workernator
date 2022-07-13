@@ -66,6 +66,30 @@ Using the namespaces & cgroups built into modern Linux kernels, we're able to bu
 Basically, this method boils down to using the special file `/proc/self/exe` which is a special link that points to the currently running binary. By using `exec.Command` from the [exec package](https://pkg.go.dev/os/exec) we can re-run the `workernator` binary with special arguments that tell the OS to run the binary in a new namespace for resource isolation. This also allows us to configure cgroups for resource management.
 
 
+##### Namespace & CGroups Closer Look
+
+When using `/proc/self/exe` to launch our subprocess, we can modify the `*exec.Cmd` we get from calling `exec.Command("/proc/self/exe")`. This is how we tell Linux what new namespaces the process should use.
+
+These are the namespaces that will be used:
+
+-   `CLONE_NEWUTS` - isolate the host & domain name
+-   `CLONE_NEWPID` - isolate the PID number space for our jobs
+-   `CLONE_NEWNS` - isolate our filesystem ( takes effect once we use `PivotRoot` )
+-   `CLONE_NEWNET` - isolate our networking
+-   `CLONE_NEWUSER` - isolate the UID/GID number spaces
+
+As for cgroups, we'll be using cgroups version 2, with the following cgroups & settings:
+
+-   `pids`
+    -   `max`: 10
+    -   `notify_on_release`: 1
+-   `cpu`
+    -   `cfs_period_us`: 100000 (0.1 second)
+    -   `cfs_quote_us`: 50000 (0.05 second)
+-   `memory`
+    -   `limit_in_bites`: 10000000 (10M)
+
+
 #### Stopping Jobs
 
 Using the `exec.Cmd` pointer that was created in the process of starting a job, we can use `exec.Cmd.Process.Kill()` to force the job to stop.

@@ -132,13 +132,15 @@ TailJob(ctx context.Context, id string) (<-chan OutputLine, error)
 
 Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will contain the ID for the job that was started.
 
+This method will start from the beginning of a job's log, sending the entire log first. If the job isn't finished, the channel will remain open and will continue to emit any new output lines received from the job. Once a job is finished the channel will be closed. If `TailJob` is called for a job that has already completed, it will close the channel as soon as it's sent the last output line.
+
 The provided `context.Context` is used for cancellation, as this function may launch a goroutine to handle putting messages into the channel.
 
 If `id` doesn't contain the ID of a job that is currently running or has run in the past, the function will return an error.
 
 `TailJob` expects to be the one to close the channel it returns. Once `TailJob` has read and sent all lines from a job, it closes the channel. This means that as long as the job is running, the channel stays open. If it is closed elsewhere, `TailJob` *will* panic and throw an error &#x2013; cause that's what happens when you try to write to a closed channel in Go!
 
-`OutputLine` is a struct that contains each line of output from a job, that may contain additional metadata such as timestamps or log type.
+`OutputLine` is a struct that contains each line of output from a job, that may contain additional metadata such as a timestamp and a boolean `error` flag. The `error` flag is used to indicate if the error comes from STDOUT (`error` `= false) or STDERR (=error` == true).
 
 On the server, for now all the output of a job will be kept in memory. No flushing to disk or a database; that's outside the scope of this challenge.
 

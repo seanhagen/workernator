@@ -327,6 +327,44 @@ As for the **L** key, only the servers will pay attention and use that key. Clie
 For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but this is also outside the scope of this exercise so we won't be doing it.
 
 
+##### Auth Example
+
+For example, say we have three users:
+
+-   `admin`, who can do everything
+-   `reader`, a special user who can only view job status and view job output
+-   `bob`, who can only start jobs
+
+This would require three TLS certificates, each with the **L** key set to one of the user names: `admin`, `reader`, or `bob`.
+
+On the server, a few map data structure will be used to define what a user is able to do. The first map will be a `map[string]bool` that maps RPC names to a boolean, where `true` means "they are allowed to use this RPC". This first map we'll call `userPermissions`. The next map will be a `map[string]userPermisisons`, and will map each user name to their set of permissions.
+
+In addition to all the RPC names, there will also be a 'special' name that can be used &#x2013; mostly for convenience. That special name is `super`, and is used to say "this user can do everything".
+
+What we'll get is something like this:
+
+```go
+type userPermissions map[string]bool 
+
+var rpcACL = map[string]userPermissions{
+  "admin": userPermissions{
+    "super": true,
+  },
+
+  "reader": userPermissions{
+    "Status": true,
+    "Tail": true,
+  },
+
+  "bob": userPermissions{
+    "Start": true,
+  }
+}
+```
+
+Then in a GRPC interceptor, the data from the TLS certificate ( after the certificate is validated, of course ) will be checked against that ACL. If the user has the proper permissions, the interceptor will pass the request along the chain. However, if they don't have the correct permissions the interceptor will return a [PermissionDenied](https://pkg.go.dev/google.golang.org/grpc/codes) error code.
+
+
 ### Command-Line Client
 
 The client is going to be built using [cobra](https://cobra.dev/).

@@ -76,6 +76,8 @@ However, like the other library methods, the implementation details are hidden f
 StopJob(id string) (*JobInfo, error)
 ```
 
+Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will contain the ID for the job that was started.
+
 If the `id` contains the ID of a current or past job in `workernator`, it will attempt to stop that job. If the ID doesn't map to such a job, the function will return an error.
 
 This function is idempotent, if `StopJob` is called with the ID of a job that has already been stopped, the function will simply return the `JobInfo` pointer.
@@ -89,6 +91,8 @@ The library will provide the following function:
 JobStatus(id string) (*JobInfo, error)  
 ```
 
+Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will contain the ID for the job that was started.
+
 If the `id` parameter contains the ID of a current or past job, the function will return the `JobInfo` for that job. Otherwise it will return an error.
 
 
@@ -101,6 +105,8 @@ The library will provide a function that allows clients to get the output logs o
 ```go
 TailJob(ctx context.Context, id string) (<-chan OutputLine, error)
 ```
+
+Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will contain the ID for the job that was started.
 
 The provided `context.Context` is used for cancellation, as this function may launch a goroutine to handle putting messages into the channel.
 

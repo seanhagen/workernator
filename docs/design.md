@@ -95,10 +95,11 @@ As for cgroups, we'll be using cgroups version 2, with the following cgroups & s
     -   `max`: 10
     -   `notify_on_release`: 1
 -   `cpu`
-    -   `cfs_period_us`: 100000 (0.1 second)
-    -   `cfs_quote_us`: 50000 (0.05 second)
+    -   `max`: 200000 1000000 (1/5 of each second)
 -   `memory`
-    -   `limit_in_bites`: 10000000 (10M)
+    -   `limit_in_bites`: 10485760 (10M)
+-   `io`
+    -   `max`: 10485760 (10M)
 
 
 #### Stopping Jobs

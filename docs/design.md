@@ -59,6 +59,17 @@ StartJob(name string, args JobData) (JobInfo,error)
 
 The `JobData` type will most likely be a simple-data-object struct that contains the arguments for the job. The `JobInfo` struct that gets returned will have some information about the job such as the ID that's required to stop the job, get it's status, or tail the output. An error will be returned only if the data in `args` contains an invalid job, or incorrect arguments for the job.
 
+The ID for a job will be generated using [xid](https://github.com/rs/xid). From the \`xid\` README:
+
+> Xid uses the Mongo Object ID algorithm to generate globally unique ids with a different serialization (base64) to make it shorter when transported as a string: <https://docs.mongodb.org/manual/reference/object-id/>
+> 
+> -   4-byte value representing the seconds since the Unix epoch,
+> -   3-byte machine identifier,
+> -   2-byte process id, and
+> -   3-byte counter, starting with a random value.
+> 
+> The binary representation of the id is compatible with Mongo 12 bytes Object IDs. The string representation is using base32 hex (w/o padding) for better space efficiency when stored in that form (20 bytes). The hex variant of base32 is used to retain the sortable property of the id.
+
 When starting a job, the library does more than just launch a goroutine and call it a day.
 
 Using the namespaces & cgroups built into modern Linux kernels, we're able to build something similar to a Docker container that the job runs inside. This is accomplished using the methods detailed in [this series of articles](https://medium.com/@teddyking/linux-namespaces-850489d3ccf) and also in [this article](https://www.infoq.com/articles/build-a-container-golang/).

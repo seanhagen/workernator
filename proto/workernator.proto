@@ -32,6 +32,7 @@ message Job {
   
   JobStatus status = 10;
   repeated string args = 11;
+  string error_msg = 12;
 
   google.protobuf.Timestamp started_at = 21;
   google.protobuf.Timestamp ended_at = 22;
@@ -60,21 +61,16 @@ message JobStatusResponse {
   Job job = 1;
 }
 
-// TailJobRequest is sent to the 'Tail' method to specify job output
-// should be streamed.
-message TailJobRequest {
+// OutputJobRequest is used to tell the 'Output' method which job to return
+// the output data from.
+message OutputJobRequest {
   string id = 1;
 }
 
-// TailJobResponse contains a single line from the output of a job,
-// with additional metadata.
-message TailJobResponse {
-  // Line is a single line of output from a running job
-  string line = 1;
-  // Timestamp is the timestamp of when the log line was captured
-  google.protobuf.Timestamp timestamp = 2;
-  // Error is true if this log line came from the stderr output of a job
-  bool error = 3;
+// OutputJobResponse contains the binary output of a job, regardless of whether
+// the job is outputting text or actual binary data ( like a file ).
+message OutputJobResponse {
+  bytes data = 1;
 }
 
 // Service defines the methods available in the Workernator service.
@@ -103,10 +99,10 @@ service Service {
   // jobs.
   rpc Status(JobStatusRequest) returns (Job) {}
 
-  // Tail returns a stream of log lines from the job. It always
+  // Output returns a stream of log lines from the job. It always
   // returns the full log from the beginning of job execution. 
   //
   // Will return an error if the ID provided doesn't map to any known
   // jobs.
-  rpc Tail(TailJobRequest) returns (stream TailJobResponse){}
+  rpc Output(OutputJobRequest) returns (stream OutputJobResponse){}
 }

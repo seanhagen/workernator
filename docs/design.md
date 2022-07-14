@@ -133,29 +133,72 @@ If the `id` parameter contains the ID of a current or past job, the function wil
 
 #### Get Job Output
 
-An important part of running a job is being able to get the output of the job. Similar to being able to use the command line tool `tail`, the library provides a method that streams the output of a running job to any client that wishes to receive that output.
+An important part of running a job is being able to get the output of the job. Because the jobs can output binary data, we have to design this API to be easy to use but allow for the flexibility of the user getting plain text **or** binary data.
 
-The library will provide a function that allows clients to get the output logs of a running or completed job:
+The library will provide a function that allows clients to get the output data of a running or completed job:
 
 ```go
-TailJob(ctx context.Context, id string) (<-chan OutputLine, error)
+TailJob(ctx context.Context, id string) (io.Reader, error)
 ```
 
 Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will contain the ID for the job that was started.
 
-This method will start from the beginning of a job's log, sending the entire log first. If the job isn't finished, the channel will remain open and will continue to emit any new output lines received from the job. Once a job is finished the channel will be closed. If `TailJob` is called for a job that has already completed, it will close the channel as soon as it's sent the last output line.
+The struct returned by this method will fulfill the `io.Reader` interface. So long as the job is still running calling `Read` on the reader will either return data or block until there is data. Once the job is complete a call to `Read` will return `io.EOF`. If the job encounters an error while it's running the call to `Read` will return an error describing what occurred.
 
-The provided `context.Context` is used for cancellation, as this function may launch a goroutine to handle putting messages into the channel.
+If a job is complete, one of two things will happen when `TailJob` is called.
+
+If the job completed successfully, the `io.Reader` can be used to get the entire output of the job.
+
+If the job **didn't** complete successfully, `TailJob` will instead return an error and an `io.Reader` that returns the same error to every call to `Read` ( just in case ).
 
 If `id` doesn't contain the ID of a job that is currently running or has run in the past, the function will return an error.
 
-`TailJob` expects to be the one to close the channel it returns. Once `TailJob` has read and sent all lines from a job, it closes the channel. This means that as long as the job is running, the channel stays open. If it is closed elsewhere, `TailJob` *will* panic and throw an error &#x2013; cause that's what happens when you try to write to a closed channel in Go!
+The library will support multiple processes requesting the output of a single job at once. A client connecting shouldn't interrupt or cause issues for any other connected client.
 
-`OutputLine` is a struct that contains each line of output from a job, that may contain additional metadata such as a timestamp and a boolean `error` flag. The `error` flag is used to indicate if the error comes from STDOUT (`error` `= false) or STDERR (=error` == true).
 
-On the server, for now all the output of a job will be kept in memory. No flushing to disk or a database; that's outside the scope of this challenge.
+##### Where Is Job Output Saved?
 
-The library will support multiple processes requesting the output of a single job at once. A client connecting won't interrupt or cause issues for any other connected client ( beyond issues caused by the number of connected clients, eg, scaling ).
+Storing the output of the job so it can be sent to clients later is an important piece of this library. There are a few things to be concerned about, such as:
+
+-   very verbose jobs or long-running jobs ( or both ) that generate **lots** of data
+-   sending the output to multiple clients, including slow or misconfigured clients
+-   handling going from old output to new output seamlessly
+
+Rather than storing the output in memory, we'll be saving the output of a job to a file. This will provide a number of benefits:
+
+-   jobs are now bound by disk space instead of how much RAM they have
+-   each client will get its own file handle, so a client reading slowly won't impact other clients
+-   using a package like [nxadm/tail](https://pkg.go.dev/github.com/nxadm/tail#section-documentation) the library can read the output and wait for new lines
+
+
+##### Potential Issues
+
+There are two main potential issues I can foresee:
+
+-   jobs that run forever could potentially fill up the filesystem
+-   too many clients could cause the OS to return a 'too many open file handles' error
+
+
+###### Filling Up The Filesystem
+
+This issue is one that could be solved with a `tmpfs` or `ramfs` file system. Both are temporary file systems that can be created with a limited amount of size. `tmpfs` is newer, and would also allow us to set a limit so that it behaves the same as a physical disk with limited space.
+
+*However*, managing the creation, mounting, un-mounting, and moving data to & from a `tmpfs` is outside the scope of this challenge.
+
+For now the system will instead use a simple watchdog that keeps an eye on the size of the output file and kills the job if it goes over some pre-configured limit. The output file size limit will be set to 1 GB initially, and the watchdog will be configured to check the size of the output file once every second.
+
+
+###### Concurrency & File Handles
+
+There are probably a few ways that this problem could be handled, but the ones that come to mind feel like they're out of scope for this challenge.
+
+One potential solution would be to create a kind of 'buffer manager' class that could be given a file handle when creating an instance, and would internally buffer the file. This buffer would be used as a simple FIFO queue that fans out to the connected clients. However, once enough clients have reached the end of the buffer the instance would start returning an error when the system would attempt to call the function to add another reader.
+
+This is because after a certain point the instance would have to start discarding the oldest data from the buffer so it can read in new data from the file. Once the first parts of a file have been discarded, new clients wouldn't be able to be sent that data from the buffer. So after a certain point this 'buffer manager' instance would have to stop accepting new reader clients, at which point the system would just create a new 'buffer manager' and start using that for new clients.
+
+Alternatively, there could be a configurable cutoff for output size. This cutoff would be a size in bytes; any output files smaller than this buffer could just be kept in memory, larger files would always be read from disk.
+
+These are just two potential solutions for dealing with too many clients connecting to the service to get the output. However, the maximum number of open files in Linux is configurable &#x2013; on my system the default reported by \`ulimit -Hn\` is 524288. For this challenge, that feels like plenty of open files!
 
 
 ### API
@@ -325,39 +368,73 @@ As for the **L** key, only the servers will pay attention and use that key. Clie
 
 For now the list of users and their permissions will be hard-coded into the server. There are packages like `viper` we could use to manage configurations, but this is also outside the scope of this exercise so we won't be doing it.
 
+On the server, a few map data structure will be used to define our permission structure:
+
+```go
+type permission int32
+
+const (
+  none permission = iota 
+  own 
+  super 
+)
+
+type rpcPermissions map[string]permission
+
+type userPermissions map[string]rpcPermissions
+
+var superUser = rpcPermissions{
+  "start": super,
+  "stop": super,
+  "status": super,
+  "output": super,
+}
+
+var statusReader = rpcPermissions{
+  "status": super,
+}
+
+var outputReader = rpcPermisisons{
+  "output": super,
+}
+
+var permissionConfig = userPermissions{}
+```
+
+Starting from the top, we have our `permission` type. Each of the constants that use this type have a specific meaning; `none` means "not allowed to use this RPC", `own` means "can use this RPC but only to interact with their own jobs", and `super` means "can use this RPC to interact with *any* job".
+
+Next up is `rpcPermissions`, which maps RPC names to a permission. The RPC names are down-cased when comparing, so 'start', 'Start', & 'sTaRt' are all equivalent. So something like `"stop": own` would mean the user can only stop their **own** jobs, `"stop": super` would allow the user to stop **any** job.
+
+After that we've got `userPermissions`, which uses a string key that represents the user name to give each user their set of permissions.
+
 
 ##### Auth Example
 
-For example, say we have three users:
+For example, say we have the following users we want to set up:
 
--   `admin`, who can do everything
--   `reader`, a special user who can only view job status and view job output
--   `bob`, who can only start jobs
+-   `admin`, who can do anything, to any job
+-   `alice`, who can start jobs and get their status
+-   `bob`, who can start jobs and get the output of them
+-   `charlie`, who can see the status of any job
 
-This would require three TLS certificates, each with the **L** key set to one of the user names: `admin`, `reader`, or `bob`.
+The first step would be to create the TLS certificates for each user, setting the `L` key in each to the username.
 
-On the server, a few map data structure will be used to define what a user is able to do. The first map will be a `map[string]bool` that maps RPC names to a boolean, where `true` means "they are allowed to use this RPC". This first map we'll call `userPermissions`. The next map will be a `map[string]userPermisisons`, and will map each user name to their set of permissions.
-
-In addition to all the RPC names, there will also be a 'special' name that can be used &#x2013; mostly for convenience. That special name is `super`, and is used to say "this user can do everything".
-
-What we'll get is something like this:
+On the server side, we'd configure the authorization like so:
 
 ```go
-type userPermissions map[string]bool 
-
-var rpcACL = map[string]userPermissions{
-  "admin": userPermissions{
-    "super": true,
+var permissionConfig = userPermissions{
+  "admin": superUser, // use our pre-configured 'super user' value
+  "alice": rpcPermissions{
+    "start": own,
+    "status": own,
   },
-
-  "reader": userPermissions{
-    "Status": true,
-    "Tail": true,
+  "bob": rpcPermissions{
+    "start": own, // least amount of trust possible, even if right now 'start' only starts a job
+    "output": own,
   },
-
-  "bob": userPermissions{
-    "Start": true,
-  }
+  "charlie": rpcPermissions{
+    "status": super,
+  },
 }
 ```
 

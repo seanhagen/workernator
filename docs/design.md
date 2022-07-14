@@ -168,13 +168,6 @@ The API is going to use GRPC rather than HTTP, as set out in the challenge requi
 We're not going to go over the entire protobuf definition here, instead we'll cover some of the design decisions so we're all on the same page. However, please do check out [workernator.proto](../proto/workernator.proto) to see the entire protobuf definition.
 
 
-##### Job Type
-
-Part of the GRPC definition includes the `JobType` enum. This is used as part of creating a job, so that the service knows which set of arguments to use.
-
-Because of how GRPC enum types work in Go, the default value for `JobType` is `Noop`. This will be a job that does nothing; it won't even attempt to do any of the cgroup or namespace stuff. This way a configuration error, programmer flub, or simple clumsy-fingered mistake won't start the wrong job.
-
-
 ##### Job Request Messages
 
 There are two potential messages that each of `Stop`, `Status`, and `Tail` could have used:
@@ -219,13 +212,6 @@ Take a look at the following potential feature requests we could get for this se
 Each of these would require one of two things. Either the `JobId` message gets overloaded to the point of being nearly useless &#x2013; or each method gets its own message type. Switching the message type a method takes is not backwards compatible in GRPC, but changing the fields of a message is.
 
 I decided that instead of overloading a `JobId` message type with fields specific to each of the routes, we'll start with each API method having it's own unique argument message type.
-
-
-##### The "Arguments" Message Type
-
-Not a lot to say about this one, but just in case you were curious: this message type is here so that there's no chance that the `args` field in the `Job` message type and the `args` field in the `JobStartRequest` message type start diverging.
-
-Don't want to be able to start a job but not see the arguments you sent when getting the status!
 
 
 ##### Separate Folders

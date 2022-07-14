@@ -103,7 +103,7 @@ As for cgroups, we'll be using cgroups version 2, with the following cgroups & s
 
 #### Stopping Jobs
 
-Using the `exec.Cmd` pointer that was created in the process of starting a job, we can use `exec.Cmd.Process.Kill()` to force the job to stop.
+Using the `exec.Cmd` pointer that was created in the process of starting a job, we can use `exec.Cmd.Process.Kill()` to force the job to stop. The job/worker runner code will also be set up to capture the signal used to kill it and ensure any child processes are terminated before exiting.
 
 However, like the other library methods, the implementation details are hidden from the world at large behind this function:
 

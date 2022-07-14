@@ -51,7 +51,7 @@ So, to break down the core bits of functionality, we're going to need:
 
 #### Starting Jobs
 
-Another function will be provided so users can start a job and provide any required arguments:
+Something like the following function will be provided so users can start a job and provide any required arguments:
 
 ```go
 StartJob(name string, args JobData) (JobInfo,error)

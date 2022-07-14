@@ -364,6 +364,23 @@ var rpcACL = map[string]userPermissions{
 Then in a GRPC interceptor, the data from the TLS certificate ( after the certificate is validated, of course ) will be checked against that ACL. If the user has the proper permissions, the interceptor will pass the request along the chain. However, if they don't have the correct permissions the interceptor will return a [PermissionDenied](https://pkg.go.dev/google.golang.org/grpc/codes) error code.
 
 
+#### Running The API
+
+The service that provides this API will be a single binary that can be started from the command line.
+
+It will have, at minimum, the following flags that will be used to configure aspects of the service:
+
+-   a `--debug` flag, that will turn on the outputting of debug messages
+-   a `--host` flag, that tells the service what address to bind to
+-   a `--port` flag, that tells the service what port to bind to
+-   a `--hostCert` flag, that tells the service the path to the TLS certificate it should use for the service
+-   a `--rootCert` flag, that tells the service the path to the TLS CA Root certificate that was used to sign the client certificates.
+
+**Important Note!**
+
+Without a properly configured root certificate, no clients will be able to connect!
+
+
 ### Command-Line Client
 
 The client is going to be built using [cobra](https://cobra.dev/).

@@ -1,0 +1,107 @@
+syntax = "proto3";
+package seanhagen.workernator;
+option go_package = "github.com/seanhagen/workernator";
+
+import "google/protobuf/timestamp.proto";
+
+// JobStatus contains the possible states for a job to be in. 
+enum JobStatus {
+  // Unknown typically means that there is no job that matches the
+  // given ID.
+  Unknown = 0;
+
+  // Running is the state a job is in while it is processing. 
+  Running = 1;
+
+  // Failed means the job either failed to start, or encountered an issue
+  // while it was running. More information can be found by checking the job
+  // logs.
+  Failed = 2;
+
+  // Finished means the job completed it's task and is no longer running.
+  Finished = 3;
+
+  // Stopped means the job was stopped by a user before it finished.
+  Stopped = 4;
+}
+// Job contains information about a job that was created at some point while the
+// service is running.
+message Job {
+  string id = 1;
+  
+  JobStatus status = 10;
+  repeated string args = 11;
+  string error_msg = 12;
+
+  google.protobuf.Timestamp started_at = 21;
+  google.protobuf.Timestamp ended_at = 22;
+}
+
+
+// JobStartRequest is sent to request a job be started in the service.
+message JobStartRequest {
+  string command = 1;
+  repeated string arguments = 2;    
+}
+
+// JobStopRequest is sent to 'Stop' to request a job be stopped
+// immediately.
+message JobStopRequest {
+  string id = 1;
+}
+
+// JobStatusRequest is used to request the status of a job.
+message JobStatusRequest {
+  string id = 1;
+}
+
+// JobStatusResponse returns the Job, if found.
+message JobStatusResponse {
+  Job job = 1;
+}
+
+// OutputJobRequest is used to tell the 'Output' method which job to return
+// the output data from.
+message OutputJobRequest {
+  string id = 1;
+}
+
+// OutputJobResponse contains the binary output of a job, regardless of whether
+// the job is outputting text or actual binary data ( like a file ).
+message OutputJobResponse {
+  bytes data = 1;
+}
+
+// Service defines the methods available in the Workernator service.
+service Service {
+  // Start creates a job and attempts to run it. It returns as soon as
+  // the job has begun running.
+  //
+  // Jobs each have their own set of required arguments; sending the
+  // wrong or invalid arguments will cause the job to fail to start.
+  rpc Start(JobStartRequest) returns (Job){}
+
+  // Stop will force-stop the job matching the ID provided. This
+  // method will attempt to stop the job as quickly as possible, and
+  // does not take into account what the job may be doing at any
+  // particular moment. This method will wait until the job has been
+  // sucesfully stopped before returning.
+  //
+  // Will return an error if the ID provided doesn't map to any known
+  // jobs.
+  rpc Stop(JobStopRequest) returns (Job){}
+
+  // Status returns the current status of any job known to the
+  // service.
+  //
+  // Will return an error if the ID provided doesn't map to any known
+  // jobs.
+  rpc Status(JobStatusRequest) returns (Job) {}
+
+  // Output returns a stream of log lines from the job. It always
+  // returns the full log from the beginning of job execution. 
+  //
+  // Will return an error if the ID provided doesn't map to any known
+  // jobs.
+  rpc Output(OutputJobRequest) returns (stream OutputJobResponse){}
+}

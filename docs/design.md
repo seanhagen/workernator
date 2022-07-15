@@ -131,6 +131,8 @@ Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will
 
 If the `id` parameter contains the ID of a current or past job, the function will return the `JobInfo` for that job. Otherwise it will return an error.
 
+If a job has failed to complete, the `error_msg` field in the `JobInfo` struct will contain the error message from the job.
+
 
 #### Get Job Output
 
@@ -144,13 +146,15 @@ TailJob(ctx context.Context, id string) (io.Reader, error)
 
 Job IDs are returned by `StartJob` method; it returns `JobInfo` struct that will contain the ID for the job that was started.
 
-The struct returned by this method will fulfill the `io.Reader` interface. So long as the job is still running calling `Read` on the reader will either return data or block until there is data. Once the job is complete a call to `Read` will return `io.EOF`. If the job encounters an error while it's running the call to `Read` will return an error describing what occurred.
+The struct returned by this method will fulfill the `io.Reader` interface. So long as the job is still running calling `Read` on the reader will either return data or block until there is data to return. Behind the scenes this is because the `io.Reader`-fulfilling struct will have a channel it's reading the output from; if a job hasn't output anything there won't be any data in the channel to read.
 
-If a job is complete, one of two things will happen when `TailJob` is called.
+Once all the data has been read from the `io.Reader`, the next call will return `io.EOF`. If the job encounters an error while it's running the call to `Read` will return an error describing what occurred.
 
-If the job completed successfully, the `io.Reader` can be used to get the entire output of the job.
+If a job is complete, one of two things will happen when `TailJob` is called:
 
-If the job **didn't** complete successfully, `TailJob` will instead return an error and an `io.Reader` that returns the same error to every call to `Read` ( just in case ).
+-   If the job **completed** successfully, a call to `TailJob` will return an `io.Reader` and a nil `error`. The `io.Reader` can then be used to get the entire output of the job the same way you would with a file or data from a network request by calling `Read([]byte)`. That call will return an `io.EOF` once it's reached the end of the output.
+
+-   If the job **didn't** **complete** successfully, `TailJob` will return a nil `io.Reader` and a non-nil `error` that gives some insight into what happened.
 
 If `id` doesn't contain the ID of a job that is currently running or has run in the past, the function will return an error.
 
@@ -184,9 +188,7 @@ There are two main potential issues I can foresee:
 
 This issue is one that could be solved with a `tmpfs` or `ramfs` file system. Both are temporary file systems that can be created with a limited amount of size. `tmpfs` is newer, and would also allow us to set a limit so that it behaves the same as a physical disk with limited space.
 
-*However*, managing the creation, mounting, un-mounting, and moving data to & from a `tmpfs` is outside the scope of this challenge.
-
-For now the system will instead use a simple watchdog that keeps an eye on the size of the output file and kills the job if it goes over some pre-configured limit. The output file size limit will be set to 1 GB initially, and the watchdog will be configured to check the size of the output file once every second.
+*However*, managing the creation, mounting, un-mounting, and moving data to & from a `tmpfs` is outside the scope of this challenge. So is any kind of watchdog to kill jobs that start output too much data. For now, managing out-of-control jobs is left up to the admin of the system.
 
 
 ###### Concurrency & File Handles

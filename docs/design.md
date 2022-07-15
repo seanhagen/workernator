@@ -454,6 +454,7 @@ It will have, at minimum, the following flags that will be used to configure asp
 -   a `--host` flag, that tells the service what address to bind to
 -   a `--port` flag, that tells the service what port to bind to
 -   a `--hostCert` flag, that tells the service the path to the TLS certificate it should use for the service
+-   a `--hostKey` flag, that tells the service the pat to the TLS key it should use for the service
 -   a `--rootCert` flag, that tells the service the path to the TLS CA Root certificate that was used to sign the client certificates.
 
 **Important Note!**

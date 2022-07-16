@@ -1,0 +1,5 @@
+direnv 2.32.1
+grpcurl 1.8.6
+golangci-lint 1.46.2
+mage 1.13.0
+upx 3.96

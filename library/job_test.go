@@ -83,12 +83,12 @@ func TestRunner_Container_Basics(t *testing.T) {
 			stdout := bytes.NewBuffer(nil)
 			stderr := bytes.NewBuffer(nil)
 
-			c, err := NewContainer(stdin, stdout, stderr, tt.command, tt.args, rootfs)
+			job, err := NewJob(stdin, stdout, stderr, tt.command, tt.args, rootfs)
 			require.NoError(err)
-			require.NotNil(c)
+			require.NotNil(job)
 
 			ctx := context.TODO()
-			err = c.Run(ctx)
+			err = job.Run(ctx)
 
 			outStr := stdout.String()
 			errStr := stderr.String()
@@ -99,6 +99,35 @@ func TestRunner_Container_Basics(t *testing.T) {
 			assert.Equal(tt.expectErr, errStr)
 		})
 	}
+}
+
+func TestContainer_MemoryLimitWorks(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	stdin := bytes.NewBuffer(nil)
+	stdout := bytes.NewBuffer(nil)
+	stderr := bytes.NewBuffer(nil)
+
+	cmd := "./grow"
+	args := []string{"./this_file_is_exactly_11mb.txt"}
+	rootfs := getRootFS(t, "./testdata/simplefs")
+
+	c, err := NewJob(stdin, stdout, stderr, cmd, args, rootfs)
+	require.NoError(err)
+	require.NotNil(c)
+
+	err = c.Run(context.TODO())
+	// this is probably supposed to be an error
+	assert.Error(err)
+
+	// 	require.NoError(err)
+
+	// 	expect := `opening './this_file_is_exactly_11mb.txt'
+	// read all 11534336 bytes (len: 11534336) of './this_file_is_exactly_11mb.txt'
+	// `
+	// 	got := stdout.String()
+	// 	assert.Equal(expect, got, "command error output: %v", stderr.String())
 }
 
 func getRootFS(t *testing.T, root string) string {

@@ -7,3 +7,7 @@ testdata/busyboxfs
 /client.pem
 /notes.org
 
+/server/ca.pem
+/server/cakey.key
+/server/server
+/server/server.pem

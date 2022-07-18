@@ -6,26 +6,14 @@ import (
 	"github.com/magefile/mage/sh"
 )
 
+// Test runs the
 func Test() error {
-	fmt.Printf("Running tests...\n")
-	packages := []string{"library"}
-
-	for _, p := range packages {
-		if err := runSubtests(p); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func runSubtests(pkg string) error {
-	fmt.Printf("Running tests for '%v'...", pkg)
-	err := sh.Run("go", "test", fmt.Sprintf("./%v", pkg))
+	fmt.Printf("Running tests...")
+	err := sh.Run("go", "test", "./...")
 	if err != nil {
-		fmt.Printf(" ERROR\n")
+		fmt.Printf(" error while running tests: %v\n", err)
 		return err
 	}
-	fmt.Printf(" DONE\n")
+	fmt.Printf(" done!\n")
 	return nil
 }

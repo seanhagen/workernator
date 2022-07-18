@@ -1,2 +1,9 @@
 scratch/
 testdata/busyboxfs
+/server.pem
+/design.org
+/cakey.key
+/ca.pem
+/client.pem
+/notes.org
+

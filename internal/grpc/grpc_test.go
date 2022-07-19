@@ -108,30 +108,6 @@ func TestInternal_NewServer(t *testing.T) {
 	assert.JSONEq(t, string(expectJSON), string(gotJSON))
 }
 
-type testDial struct {
-	listener *bufconn.Listener
-}
-
-func setupServerCerts(t *testing.T, certPath, keyPath, chainPath string) (grpc.ServerOption, error) {
-	t.Helper()
-	cert, certPool, err := setupTestCerts(t, certPath, keyPath, chainPath)
-	if err != nil {
-		return nil, err
-	}
-
-	creds := grpc.Creds(
-		credentials.NewTLS(
-			&tls.Config{
-				ClientAuth:   tls.RequireAndVerifyClientCert,
-				Certificates: []tls.Certificate{cert},
-				ClientCAs:    certPool,
-			},
-		),
-	)
-
-	return creds, nil
-}
-
 func setupClientCerts(t *testing.T, certPath, keyPath, chainPath string) (grpc.DialOption, error) {
 	t.Helper()
 	cert, certPool, err := setupTestCerts(t, certPath, keyPath, chainPath)

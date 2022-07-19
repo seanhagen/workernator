@@ -1,2 +1,0 @@
-Workernator CLI Client 
-======================

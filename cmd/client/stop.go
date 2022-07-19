@@ -60,8 +60,8 @@ If the job doesn't exist, will return an error.`,
 			return fmt.Errorf("unable to stop job: %w", err)
 		}
 
-		if resp.Error() != nil {
-			_, _ = fmt.Fprintf(cmd.OutOrStderr(), "job reported error: %s\n", resp.Error().Error())
+		if resp.Error != nil {
+			_, _ = fmt.Fprintf(cmd.OutOrStderr(), "job reported error: %s\n", resp.Error.Error())
 		}
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "stopped job '%v'\n", args[0])
 		return nil

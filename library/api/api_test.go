@@ -67,8 +67,8 @@ func TestLibrary_Manager_StartJob(t *testing.T) {
 
 		err = jerb.Wait()
 		require.Error(t, err)
-		assert.Equal(t, err, jerb.Error())
-		require.True(t, strings.Contains(jerb.Error().Error(), "exit status 1"))
+		assert.Equal(t, err, jerb.Error)
+		require.True(t, strings.Contains(jerb.Error.Error(), "exit status 1"))
 	})
 
 	t.Run("commands with invalid arguments should return an error", func(t *testing.T) {
@@ -86,17 +86,14 @@ func TestLibrary_Manager_StartJob(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, job)
 
-		var ji *library.Job
-		assert.Implements(t, ji, job)
-
-		_, err = xid.FromString(job.ID())
+		_, err = xid.FromString(job.ID)
 		assert.NoError(t, err)
 
-		assert.Equal(t, command, job.Command())
-		assert.Equal(t, args, job.Arguments())
+		assert.Equal(t, command, job.Command)
+		assert.Equal(t, args, job.Arguments)
 
 		assert.NoError(t, job.Wait())
-		assert.Equal(t, library.Finished, job.Status())
+		assert.Equal(t, library.Finished, job.Status)
 	})
 }
 
@@ -142,10 +139,10 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, job)
 
-			status, err := mng.StopJob(ctx, job.ID())
+			jobInfo, err := mng.StopJob(ctx, job.ID)
 			require.NoError(t, err)
-			require.NotNil(t, status)
-			assert.Equal(t, library.Stopped, status.Status())
+			require.NotNil(t, jobInfo)
+			assert.Equal(t, library.Stopped, jobInfo.Status)
 		},
 	)
 
@@ -156,7 +153,7 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 
 		err = job.Stop()
 		require.NoError(t, err)
-		assert.Equal(t, library.Stopped, job.Status())
+		assert.Equal(t, library.Stopped, job.Status)
 	})
 }
 
@@ -203,16 +200,13 @@ func TestLibrary_Manager_JobStatus(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, job)
 
-		status, err := mng.JobStatus(ctx, job.ID())
+		status, err := mng.JobStatus(ctx, job.ID)
 		require.NoError(t, err)
 		require.NotNil(t, status)
 
-		var ji *library.JobInfo
-		assert.Implements(t, ji, status)
-
-		assert.Equal(t, job.ID(), status.ID())
-		assert.Equal(t, job.Command(), status.Command())
-		assert.Equal(t, job.Arguments(), status.Arguments())
+		assert.Equal(t, job.ID, status.ID)
+		assert.Equal(t, job.Command, status.Command)
+		assert.Equal(t, job.Arguments, status.Arguments)
 	})
 }
 
@@ -262,7 +256,7 @@ func TestLibrary_Manager_Output(t *testing.T) {
 		// wait for the job to complete
 		require.NoError(t, job.Wait())
 
-		reader, err := mng.GetJobOutput(ctx, job.ID())
+		reader, err := mng.GetJobOutput(ctx, job.ID)
 		require.NoError(t, err)
 		var r *io.Reader
 		require.Implements(t, r, reader)
@@ -292,7 +286,7 @@ all done!
 		require.NoError(t, err)
 		require.NotNil(t, job)
 
-		reader, err := mng.GetJobOutput(ctx, job.ID())
+		reader, err := mng.GetJobOutput(ctx, job.ID)
 		require.NoError(t, err)
 		var r *io.Reader
 		require.Implements(t, r, reader)

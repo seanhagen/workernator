@@ -24,7 +24,7 @@ type Config struct {
 	OutputPath string
 }
 
-// Manager is what handles ( ie, manages ) running jobs, including:
+// Manager is what handles ( ie, manages ) jobs, including:
 //  - starting jobs
 //  - stopping jobs
 //  - getting the status of a running job
@@ -32,7 +32,7 @@ type Config struct {
 //
 // It should be initialized using NewManager(conf Config).
 type Manager struct {
-	jobs    map[xid.ID]*job
+	jobs    map[xid.ID]*library.Job
 	jobLock sync.Mutex
 
 	outputDir string
@@ -46,7 +46,7 @@ func NewManager(conf Config) (*Manager, error) {
 	}
 
 	manager := &Manager{
-		jobs:      map[xid.ID]*job{},
+		jobs:      map[xid.ID]*library.Job{},
 		outputDir: conf.OutputPath,
 		jobLock:   sync.Mutex{},
 	}
@@ -58,7 +58,7 @@ func NewManager(conf Config) (*Manager, error) {
 // an object that provides some information about the job, as well as
 // the ability to wait for the job to finish, or to stop the job early
 // by killing it.
-func (m *Manager) StartJob(ctx context.Context, command string, args ...string) (library.Job, error) {
+func (m *Manager) StartJob(ctx context.Context, command string, args ...string) (*library.Job, error) {
 	id := xid.New()
 
 	jobOutputDir := m.outputDir + "/" + id.String()
@@ -81,23 +81,26 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	cmd.Stdout = stdoutFile
 	cmd.Stderr = stderrFile
 
+	startTime := time.Now()
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return nil, err
 	}
 
-	j := &job{
-		id:     id,
-		status: pb.JobStatus_Running,
+	j := &library.Job{
+		JobInfo: library.JobInfo{
+			ID:     id.String(),
+			Status: library.JobStatus(pb.JobStatus_Running.Number()),
 
-		command: command,
-		args:    args,
+			Command:   command,
+			Arguments: args,
 
-		cmd:  cmd,
-		done: ctx,
-
-		stdout: stdoutFile,
+			Started: startTime,
+		},
 	}
+
+	j.SetCommand(cmd)
+	j.SetContext(ctx)
 
 	m.jobLock.Lock()
 	m.jobs[id] = j
@@ -106,11 +109,12 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	go func() {
 		err := cmd.Wait()
 		st := cmd.ProcessState.ExitCode()
+		j.Ended = time.Now()
 
 		m.jobLock.Lock()
 		j := m.jobs[id]
 
-		j.status = pb.JobStatus_Finished
+		j.Status = library.JobStatus(pb.JobStatus_Finished.Number())
 
 		if x := stdoutFile.Close(); x != nil {
 			zap.L().Error("unable to close output file", zap.Error(err))
@@ -120,17 +124,17 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 		}
 
 		if err != nil {
-			j.err = err
-			j.status = pb.JobStatus_Failed
+			j.Error = err
+			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
 		}
 
 		if err == nil && st != 0 {
-			j.err = fmt.Errorf("exited with status %v", st)
-			j.status = pb.JobStatus_Failed
+			j.Error = fmt.Errorf("exited with status %v", st)
+			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
 		}
 
 		if st == statusKilled {
-			j.status = pb.JobStatus_Stopped
+			j.Status = library.JobStatus(pb.JobStatus_Stopped.Number())
 		}
 
 		m.jobs[id] = j
@@ -144,19 +148,20 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 // JobStatus returns the status of a job, whether it's running or
 // already finished. If the ID provided is either not a valid xid or
 // not the ID of a job an error will be returned.
-func (m *Manager) JobStatus(ctx context.Context, id string) (library.JobInfo, error) {
+func (m *Manager) JobStatus(ctx context.Context, id string) (*library.JobInfo, error) {
 	job, err := m.validateID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return job, nil
+	info := job.Info()
+	return &info, nil
 }
 
 // StopJob attempts to stop the job indicated by the ID. If the ID
 // provided is either not a valid xid or not the ID of a job an error
 // will be returned.
-func (m *Manager) StopJob(ctx context.Context, id string) (library.JobInfo, error) {
+func (m *Manager) StopJob(ctx context.Context, id string) (*library.JobInfo, error) {
 	job, err := m.validateID(id)
 	if err != nil {
 		return nil, err
@@ -165,7 +170,8 @@ func (m *Manager) StopJob(ctx context.Context, id string) (library.JobInfo, erro
 	if err := job.Stop(); err != nil {
 		return nil, err
 	}
-	return job, nil
+	info := job.Info()
+	return &info, nil
 }
 
 // GetJobOutput returns an io.Reader that can be read to get the
@@ -176,11 +182,12 @@ func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.Reader, error
 	if err != nil {
 		return nil, err
 	}
+
 	// this is the cool bit
 	read, write := io.Pipe()
 
 	// path to our output file
-	path := m.outputDir + "/" + job.ID() + "/output"
+	path := m.outputDir + "/" + job.ID + "/output"
 	output, err := os.OpenFile(path, os.O_RDONLY, 0444)
 	if err != nil {
 		zap.L().Error("unable to open output file", zap.Error(err))
@@ -196,7 +203,7 @@ func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.Reader, error
 
 // validateID validates that the ID given is a valid xid, and the ID
 // of a job started by this manager.
-func (m *Manager) validateID(id string) (*job, error) {
+func (m *Manager) validateID(id string) (*library.Job, error) {
 	jid, err := xid.FromString(id)
 	if err != nil {
 		return nil, library.NewErrInvalidID(id, err)
@@ -214,7 +221,7 @@ func (m *Manager) validateID(id string) (*job, error) {
 // read from the provided file and write to the io pipe provided. If
 // the job hasn't finished, it will wait until it has before
 // exiting. This provides the 'tail' functionality.
-func pipeToOutput(file *os.File, cmdJob *job, writeTo *io.PipeWriter) {
+func pipeToOutput(file *os.File, cmdJob *library.Job, writeTo *io.PipeWriter) {
 	var lastSize int64
 	buf := make([]byte, 1024)
 

@@ -104,15 +104,15 @@ to quickly create a Cobra application.`,
 	},
 }
 
-func statusToTemplateData(resp library.JobInfo) statusTemplateData {
+func statusToTemplateData(resp *library.JobInfo) statusTemplateData {
 	out := statusTemplateData{
-		ID:        resp.ID(),
-		Command:   resp.Command(),
-		Arguments: strings.Join(resp.Arguments(), ", "),
-		Started:   resp.Started().Format(time.RFC3339),
+		ID:        resp.ID,
+		Command:   resp.Command,
+		Arguments: strings.Join(resp.Arguments, ", "),
+		Started:   resp.Started.Format(time.RFC3339),
 	}
 
-	switch resp.Status() {
+	switch resp.Status {
 	case library.Running:
 		out.Status = "Running"
 	case library.Failed:
@@ -127,12 +127,12 @@ func statusToTemplateData(resp library.JobInfo) statusTemplateData {
 		out.Status = "Unknown"
 	}
 
-	if !resp.Ended().IsZero() {
-		out.Ended = resp.Ended().Format(time.RFC3339)
+	if !resp.Ended.IsZero() {
+		out.Ended = resp.Ended.Format(time.RFC3339)
 	}
 
-	if resp.Error() != nil {
-		out.Error = resp.Error().Error()
+	if resp.Error != nil {
+		out.Error = resp.Error.Error()
 	}
 	return out
 }

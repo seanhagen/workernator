@@ -15,9 +15,9 @@ import (
 // Manager is the interface expected by the service that it'll use to
 // manage jobs on behalf of callers.
 type Manager interface {
-	StartJob(context.Context, string, ...string) (library.Job, error)
-	StopJob(context.Context, string) (library.JobInfo, error)
-	JobStatus(context.Context, string) (library.JobInfo, error)
+	StartJob(context.Context, string, ...string) (*library.Job, error)
+	StopJob(context.Context, string) (*library.JobInfo, error)
+	JobStatus(context.Context, string) (*library.JobInfo, error)
 	GetJobOutput(context.Context, string) (io.Reader, error)
 }
 
@@ -34,21 +34,21 @@ func NewService(mgr Manager) (*Service, error) {
 	return &Service{manager: mgr}, nil
 }
 
-func jobinfoToProtobuf(in library.JobInfo) *pb.Job {
+func jobinfoToProtobuf(in *library.JobInfo) *pb.Job {
 	out := &pb.Job{
-		Id:        in.ID(),
-		Status:    pb.JobStatus(in.Status()),
-		Command:   in.Command(),
-		Args:      in.Arguments(),
-		StartedAt: timestamppb.New(in.Started()),
+		Id:        in.ID,
+		Status:    pb.JobStatus(in.Status),
+		Command:   in.Command,
+		Args:      in.Arguments,
+		StartedAt: timestamppb.New(in.Started),
 	}
 
-	if in.Error() != nil {
-		out.ErrorMsg = in.Error().Error()
+	if in.Error != nil {
+		out.ErrorMsg = in.Error.Error()
 	}
 
-	if !in.Ended().IsZero() {
-		out.EndedAt = timestamppb.New(in.Ended())
+	if !in.Ended.IsZero() {
+		out.EndedAt = timestamppb.New(in.Ended)
 	}
 
 	return out
@@ -60,7 +60,8 @@ func (s *Service) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, 
 	if err != nil {
 		return nil, err
 	}
-	return jobinfoToProtobuf(job), nil
+	info := job.Info()
+	return jobinfoToProtobuf(&info), nil
 }
 
 // Stop handles stopping a job

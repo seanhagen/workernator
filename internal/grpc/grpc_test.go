@@ -145,6 +145,7 @@ func setupClientCerts(t *testing.T, certPath, keyPath, chainPath string) (grpc.D
 				ClientAuth:   tls.RequireAndVerifyClientCert,
 				Certificates: []tls.Certificate{cert},
 				RootCAs:      certPool,
+				MinVersion:   tls.VersionTLS13,
 			},
 		),
 	)

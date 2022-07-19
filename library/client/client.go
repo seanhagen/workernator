@@ -119,6 +119,7 @@ func setupTLS(conf Config) (grpc.DialOption, error) {
 				ClientAuth:   tls.RequireAndVerifyClientCert,
 				Certificates: []tls.Certificate{cert},
 				RootCAs:      certPool,
+				MinVersion:   tls.VersionTLS13,
 			},
 		),
 	)

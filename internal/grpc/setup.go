@@ -186,6 +186,7 @@ func setupCerts(conf Config) (grpc.ServerOption, error) {
 				ClientAuth:   tls.RequireAndVerifyClientCert,
 				Certificates: []tls.Certificate{cert},
 				ClientCAs:    certPool,
+				MinVersion:   tls.VersionTLS13,
 			},
 		),
 	)

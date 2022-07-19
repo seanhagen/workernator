@@ -33,7 +33,8 @@ type ClientTestSuite struct {
 	td testDial
 }
 
-// startServer ...
+// startServer sets up and runs a grpc server that will be stopped
+// when the test is over
 func (cts *ClientTestSuite) startServer() {
 	mtlsConf, err := setupServerCerts(cts.T(), "./testdata/server.pem", "./testdata/cakey.key", "./testdata/ca.pem")
 	cts.Require().NoError(err)
@@ -52,7 +53,7 @@ func (cts *ClientTestSuite) startServer() {
 	})
 }
 
-// SetupTest ...
+// SetupTest handles any setup required by ALL the tests in this suite
 func (cts *ClientTestSuite) SetupTest() {
 	cts.td = testDial{
 		listener: bufconn.Listen(bufSize),

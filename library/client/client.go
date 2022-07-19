@@ -14,23 +14,25 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// JobStatus ...
+// JobStatus is used to define the potential statuses for a job
 type JobStatus int
 
 const (
-	// Unknown ...
+	// Unknown is the default value, and should be treated as an error
 	Unknown JobStatus = 0
-	// Running ...
+	// Running means the job is still executing
 	Running = 1
-	// Failed ...
+	// Failed means the job returned an error and did not complete successfully
 	Failed = 2
-	// Finished ...
+	// Finished means the job completed succesfully
 	Finished = 3
-	// Stopped ...
+	// Stopped means the job was stopped/killed before it could complete
 	Stopped = 4
 )
 
-// JobResponse ...
+// JobResponse is returned from StartJob, StopJob, and JobStatus; it
+// contains the information about a job such as the status and what
+// command the job was asked to run.
 type JobResponse struct {
 	ID      string
 	Status  JobStatus
@@ -41,13 +43,14 @@ type JobResponse struct {
 	Ended   time.Time
 }
 
-// Client ...
+// Client is the API client that wraps the auto-generated GRPC methods
+// with something a bit nicer.
 type Client struct {
 	conn *grpc.ClientConn
 	grpc pb.ServiceClient
 }
 
-// Config ...
+// Config is used by NewClient to build a new Client
 type Config struct {
 	Host string
 	Port string
@@ -59,7 +62,13 @@ type Config struct {
 	DialOpts []grpc.DialOption
 }
 
-// NewClient ...
+// NewClient builds a Client, returning an error if it encounters an
+// issue while trying to create the client.
+//
+// Errors can include:
+//  - invalid TLS certificates & key for mTLS
+//  - invalid host or port
+//  - unable to connect to the GRPC server
 func NewClient(ctx context.Context, conf Config) (*Client, error) {
 	tlsDialOpt, err := setupTLS(conf)
 	if err != nil {

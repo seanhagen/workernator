@@ -13,19 +13,22 @@ const (
 	handshakeTimeout = time.Second * 10
 )
 
+// GRPCServer is a type alias for grpc.Server
 type GRPCServer = grpc.Server
 
-// GRPCHandler ...
+// GRPCHandler is a function type accepted by RegisterServerHandler so
+// users of the Server object can register their services
 type GRPCHandler func(*grpc.Server)
 
-// Server ...
+// Server wraps up a *grpc.Server and provides a really simple wrapper
 type Server struct {
 	srv    *grpc.Server
 	listen net.Listener
 	config Config
 }
 
-// NewServer ...
+// NewServer uses the provided Config to build a GRPC server that can
+// be used to handle client requests.
 func NewServer(conf Config) (*Server, error) {
 	if err := conf.Valid(); err != nil {
 		return nil, fmt.Errorf("can't configure server, invalid configuration: %w", err)
@@ -72,7 +75,8 @@ func NewServer(conf Config) (*Server, error) {
 	return server, nil
 }
 
-// RegisterServerHandler  ...
+// RegisterServerHandler is used to register services with the
+// *grpc.Server we've got wrapped up.
 func (s *Server) RegisterServerHandler(hn GRPCHandler) {
 	hn(s.srv)
 }

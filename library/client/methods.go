@@ -9,8 +9,9 @@ import (
 	pb "github.com/seanhagen/workernator/internal/pb"
 )
 
-// StartJob ...
 func (c *Client) StartJob(ctx context.Context, command string, arguments ...string) (*JobResponse, error) {
+// StartJob reaches out to the server to ask it to run a command for
+// us as a job.
 	req := pb.JobStartRequest{
 		Command:   command,
 		Arguments: arguments,
@@ -24,8 +25,15 @@ func (c *Client) StartJob(ctx context.Context, command string, arguments ...stri
 	return grpcJobToClientJob(resp), nil
 }
 
-// StopJob  ...
 func (c *Client) StopJob(ctx context.Context, id string) error {
+// StopJob reaches out to the server to ask it to stop a running job
+// for us. If there is an issue killing the job an error will be
+// returned, otherwise the only errors should be related to network
+// issues ( can't reach host, etc ).
+//
+// This function is idempotent, it can be called multiple times with
+// the same ID ( so long as it's a valid ID ) and it will return the
+// same result.
 	req := pb.JobStopRequest{Id: id}
 
 	resp, err := c.grpc.Stop(ctx, &req)
@@ -41,8 +49,10 @@ func (c *Client) StopJob(ctx context.Context, id string) error {
 	return nil
 }
 
-// JobStatus ...
 func (c *Client) JobStatus(ctx context.Context, id string) (*JobResponse, error) {
+// JobStatus reaches out to the server to ask for the status of a
+// job. If the ID given is either invalid or doesn't map to a job, an
+// error will be returned.
 	req := pb.JobStatusRequest{Id: id}
 	resp, err := c.grpc.Status(ctx, &req)
 	if err != nil {
@@ -52,7 +62,10 @@ func (c *Client) JobStatus(ctx context.Context, id string) (*JobResponse, error)
 	return grpcJobToClientJob(resp), nil
 }
 
-// JobOutput ...
+// JobOutput reaches out to the server to request the output be
+// streamed to the client.  The function returns an io.Reader that
+// when read will return the output from the job. If the ID given is
+// either invalid or doesn't map to a job, an error will be returned.
 func (c *Client) JobOutput(ctx context.Context, id string) (io.Reader, error) {
 	req := pb.OutputJobRequest{Id: id}
 	strm, err := c.grpc.Output(ctx, &req)

@@ -6,7 +6,12 @@ import (
 	pb "github.com/seanhagen/workernator/internal/pb"
 )
 
-// TestStart  ...
+// TestStart uses the setup client to attempt to start a job. The GRPC
+// client runs against a local test server started by the test; the
+// method used by this test server to handle a start job request is
+// the `cts.server.startHandle` function that's created. Once the
+// server is started with `cts.startServer()` the client can be called
+// to test the functionality.
 func (cts *ClientTestSuite) TestStart() {
 	ctx := context.TODO()
 

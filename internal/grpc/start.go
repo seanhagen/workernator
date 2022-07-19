@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Start  ...
+// Start launches the GRPC server so it can handle incoming requests.
 func (s *Server) Start(ctx context.Context) error {
 	zap.L().Info("launching grpc server", zap.String("port", s.config.Port))
 
@@ -35,7 +35,6 @@ func (s *Server) Start(ctx context.Context) error {
 	return s.stop(ctx)
 }
 
-// runGRPC  ...
 func (s *Server) runGRPC(ctx context.Context, errChan chan<- error) {
 	if s.srv == nil {
 		errChan <- fmt.Errorf("server hasn't been intialized properly")
@@ -63,7 +62,9 @@ func (s *Server) runGRPC(ctx context.Context, errChan chan<- error) {
 	zap.L().Info("grpc server stopped")
 }
 
-// stop ...
+// stop is where any pre-shutdown things should get handled, such as
+// syncing any logs to disk, etc. Right now there isn't anything that
+// needs to happen here, so this is more of a placeholder for later.
 func (s *Server) stop(ctx context.Context) error {
 	return nil
 }

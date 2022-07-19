@@ -13,46 +13,57 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Permission ...
+// Permission defines a type used to handle permission levels
 type Permission int32
 
 const (
-	// None ...
-	None Permission = iota
-	// Own ...
-	Own
-	// Super ...
+	// None means the user cannot use the RPC
+	None Permission = 0
+	// Own means the user can use the RPC, but only to interact with their own jobs
+	Own = 1
+	// Super means the user can use the RPC, and can interact with any jobs
 	Super = 100
 )
 
 var validRoutes = []string{"start", "stop", "status", "output"}
 
-// RPCPermissions ...
+// RPCPermissions maps RPC names to a permission level
 type RPCPermissions map[string]Permission
 
-// UserPermissions ...
+// UserPermissions maps user names to a set of RPC permissions
 type UserPermissions map[string]RPCPermissions
 
-// Config ...
+// Config contains the information required to set up a GRPC server
 type Config struct {
+	// DevMode debug logging will be enabled if true
 	DevMode bool
-	Port    string
+	// Port controls the port the GRPC server will run on
+	Port string
 
-	CertPath  string
-	KeyPath   string
+	// CertPath should be the path to a valid TLS v1.3 certificate file
+	CertPath string
+	// ChainPath should be the path to the valid TLS v1.3 CA certificate
+	// used to generate the certificate found in CertPath
 	ChainPath string
+	// KeyPath should be the path to the key used in generating both
+	// certificates
+	KeyPath string
 
+	// Interceptors is optional, but any interceptors in here will be
+	// added to the list of interceptors during server startup
 	Interceptors struct {
 		Unary  []grpc.UnaryServerInterceptor
 		Stream []grpc.StreamServerInterceptor
 	}
 
+	// ACL is the set of user permissions the server will use
 	ACL UserPermissions
 
 	LogOpts []grpc_zap.Option
 }
 
-// Valid ...
+// Valid tests the config to ensure it's valid. If it's not valid, an
+// error is returned.
 func (c Config) Valid() error {
 	if err := c.portValid(); err != nil {
 		return fmt.Errorf("invalid port: %w", err)
@@ -77,7 +88,6 @@ func (c Config) Valid() error {
 	return nil
 }
 
-// portValid  ...
 func (c Config) portValid() error {
 	c.Port = strings.TrimSpace(c.Port)
 
@@ -97,7 +107,6 @@ func (c Config) portValid() error {
 	return nil
 }
 
-// keyPathValid ...
 func (c Config) keyPathValid() error {
 	c.KeyPath = strings.TrimSpace(c.KeyPath)
 	if err := keyValid(c.KeyPath); err != nil {
@@ -107,7 +116,6 @@ func (c Config) keyPathValid() error {
 	return nil
 }
 
-// certPathValid ...
 func (c Config) certPathValid() error {
 	c.CertPath = strings.TrimSpace(c.CertPath)
 	if err := certValid(c.CertPath); err != nil {
@@ -117,7 +125,6 @@ func (c Config) certPathValid() error {
 	return nil
 }
 
-// chainPathValid ...
 func (c Config) chainPathValid() error {
 	c.ChainPath = strings.TrimSpace(c.ChainPath)
 	if err := certValid(c.ChainPath); err != nil {
@@ -126,7 +133,6 @@ func (c Config) chainPathValid() error {
 	return nil
 }
 
-// aclValid ...
 func (c Config) aclValid() error {
 	if len(c.ACL) == 0 {
 		return fmt.Errorf("acl can't be empty, require at least one configured user")

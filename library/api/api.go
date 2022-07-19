@@ -16,17 +16,19 @@ import (
 
 const statusKilled = -1
 
-// Config ...
+// Config is used by NewManager to configure a Manager before returning it
 type Config struct {
-	// TmpPath is where the manager will create & store temporary files
-	// related to running commands, or preparing images
-	TmpPath string
-
 	// OutputPath is where the manager will store the final output of a job
 	OutputPath string
 }
 
-// Manager ...
+// Manager is what handles ( ie, manages ) running jobs, including:
+//  - starting jobs
+//  - stopping jobs
+//  - getting the status of a running job
+//  - getting the output of a job
+//
+// It should be initialized using NewManager(conf Config).
 type Manager struct {
 	jobs    map[xid.ID]*job
 	jobLock sync.Mutex
@@ -50,7 +52,10 @@ func NewManager(pathToTempRoot string) (*Manager, error) {
 	return manager, nil
 }
 
-// StartJob  ...
+// StartJob builds and starts the command as a running job, returning
+// an object that provides some information about the job, as well as
+// the ability to wait for the job to finish, or to stop the job early
+// by killing it.
 func (m *Manager) StartJob(ctx context.Context, command string, args ...string) (library.Job, error) {
 	id := xid.New()
 
@@ -135,7 +140,9 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	return j, nil
 }
 
-// JobStatus  ...
+// JobStatus returns the status of a job, whether it's running or
+// already finished. If the ID provided is either not a valid xid or
+// not the ID of a job an error will be returned.
 func (m *Manager) JobStatus(ctx context.Context, id string) (library.JobInfo, error) {
 	job, err := m.validateID(id)
 	if err != nil {
@@ -145,7 +152,9 @@ func (m *Manager) JobStatus(ctx context.Context, id string) (library.JobInfo, er
 	return job, nil
 }
 
-// StopJob  ...
+// StopJob attempts to stop the job indicated by the ID. If the ID
+// provided is either not a valid xid or not the ID of a job an error
+// will be returned.
 func (m *Manager) StopJob(ctx context.Context, id string) (library.JobInfo, error) {
 	job, err := m.validateID(id)
 	if err != nil {
@@ -158,7 +167,9 @@ func (m *Manager) StopJob(ctx context.Context, id string) (library.JobInfo, erro
 	return job, nil
 }
 
-// GetJobOutput  ...
+// GetJobOutput returns an io.Reader that can be read to get the
+// output of a job. If the ID provided is either not a valid xid or
+// not the ID of a job an error will be returned.
 func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.Reader, error) {
 	job, err := m.validateID(id)
 	if err != nil {
@@ -169,20 +180,24 @@ func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.Reader, error
 	path := m.tmpDir + "/" + job.ID() + "/output"
 	//fmt.Printf("reading output from '%v'\n", path)
 
+	// this is the cool bit
 	read, write := io.Pipe()
 	f, err := os.OpenFile(path, os.O_RDONLY, 0444)
+	// path to our output file
 	if err != nil {
 		fmt.Printf("unable to open output file: %v\n", err)
 		return nil, err
 	}
 
-	//fmt.Printf("launching goroutine to read from file and write to pipe!\n")
-	go pipeToOutput(f, job, read, write)
+	// launch a go routine to read from the file and write to the pipe
+	go pipeToOutput(output, job, write)
 
+	// immediately return the pipe reader for the user
 	return read, nil
 }
 
-// validateID ...
+// validateID validates that the ID given is a valid xid, and the ID
+// of a job started by this manager.
 func (m *Manager) validateID(id string) (*job, error) {
 	jid, err := xid.FromString(id)
 	if err != nil {
@@ -197,8 +212,11 @@ func (m *Manager) validateID(id string) (*job, error) {
 	return job, nil
 }
 
-func pipeToOutput(file *os.File, cmdJob *job, clientReader *io.PipeReader, writeTo *io.PipeWriter) {
-	//fmt.Printf("[pto] pipe to output, started!\n")
+// pipeToOutput is meant to be launched as a goroutine so that it can
+// read from the provided file and write to the io pipe provided. If
+// the job hasn't finished, it will wait until it has before
+// exiting. This provides the 'tail' functionality.
+func pipeToOutput(file *os.File, cmdJob *job, writeTo *io.PipeWriter) {
 	var lastSize int64
 	buf := make([]byte, 1024)
 

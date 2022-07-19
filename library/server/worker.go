@@ -17,38 +17,40 @@ import (
 //go:embed king_lear.html
 var kingLear string
 
-// Manager ...
+// Manager is the interface expected by the service that it'll use to
+// manage jobs on behalf of callers.
 type Manager interface {
 	StartJob(ctx context.Context, cmd string, args ...string) (library.Job, error)
 	Status(ctx context.Context, id string)
 }
 
-// Service is
+// Service is the implementation of the Workernator GRPC service
 type Service struct {
 	pb.UnimplementedServiceServer
 }
 
-// NewService ...
 func NewService() (*Service, error) {
 	return &Service{}, nil
+// NewService builds a Service, returning an error if there are any issues encountered
+// while setting up the service.
 }
 
-// Start ...
+// Start handles starting a job
 func (s *Service) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error) {
 	return debugOutput(), nil
 }
 
-// Stop ...
+// Stop handles stopping a job
 func (s *Service) Stop(ctx context.Context, req *pb.JobStopRequest) (*pb.Job, error) {
 	return debugOutput(), nil
 }
 
-// Status ...
+// Status handles returning the status of any running or finished jobs
 func (s *Service) Status(ctx context.Context, req *pb.JobStatusRequest) (*pb.Job, error) {
 	return debugOutput(), nil
 }
 
-// Output ...
+// Output handles streaming the output of any running or finished jobs
 func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer) error {
 	err := strm.Send(&pb.OutputJobResponse{
 		Data: []byte("thanks for asking for the output of job '" + req.GetId() + "'\n"),

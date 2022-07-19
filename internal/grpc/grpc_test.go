@@ -158,7 +158,6 @@ type skeleton struct {
 	handleStart func(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error)
 }
 
-// Start  ...
 func (sk *skeleton) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error) {
 	return sk.handleStart(ctx, req)
 }

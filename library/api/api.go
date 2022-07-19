@@ -12,6 +12,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library"
+	"go.uber.org/zap"
 )
 
 const statusKilled = -1
@@ -104,18 +105,16 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 		err := cmd.Wait()
 		st := cmd.ProcessState.ExitCode()
 
-		//fmt.Printf("##############################\nJOB COMPLETE\n##############################\n\n")
-
 		m.jobLock.Lock()
 		j := m.jobs[id]
 
 		j.status = pb.JobStatus_Finished
 
 		if x := stdoutFile.Close(); x != nil {
-			fmt.Printf("unable to close output file: %v\n", err)
+			zap.L().Error("unable to close output file", zap.Error(err))
 		}
 		if x := stderrFile.Close(); x != nil {
-			fmt.Printf("unable to close error output file: %v\n", err)
+			zap.L().Error("unable to close error output file", zap.Error(err))
 		}
 
 		if err != nil {
@@ -220,59 +219,39 @@ func pipeToOutput(file *os.File, cmdJob *job, writeTo *io.PipeWriter) {
 	for {
 		fi, err := file.Stat()
 		if err != nil {
-			//fmt.Printf("[pto] unable to stat file: %v\n", err)
 			x := fmt.Errorf("unable to stat file: %w", err)
 			// clientReader.CloseWithError(x)
 			writeTo.CloseWithError(x)
 			return
 		}
 
-		//fmt.Printf("[pto] file size: %v, last size: %v\n", fi.Size(), lastSize)
 		if fi.Size() > lastSize {
 			n, err := file.Read(buf)
 
 			// if we read anything, first write it to our pipe
 			if n > 0 {
 				lastSize += int64(n)
-				//fmt.Printf("[pto] read %v bytes, writing to pipe...", n)
-				// m, x := writeTo.Write(buf[:n])
-				//fmt.Printf(" wrote %v bytes (error: %v)\n", m, x)
 				writeTo.Write(buf[:n])
 			}
-			//else {
-			//fmt.Printf("[pto] didn't read anything from the file?\n")
-			//}
 
 			if err == nil && cmdJob.Finished() {
-				//fmt.Printf("[pto] job done!\n")
-				// clientReader.CloseWithError(io.EOF)
 				writeTo.CloseWithError(io.EOF)
 				return
 			}
 
-			//fmt.Printf("[pto] encountered error: %v\n", err)
-
 			// unable to read from the file because we've reached the end?
 			if err == io.EOF {
-				//fmt.Printf("[pto] reached end of file!\n")
-				// if the command has finished running, then we're really done for reals
 				if cmdJob.Finished() {
-					//fmt.Printf("[pto] job is finished!\n")
-					// clientReader.CloseWithError(io.EOF)
 					writeTo.CloseWithError(io.EOF)
 					return
 				}
-				//fmt.Printf("[pto] job still running, waiting 200ms\n")
-				// if the command isn't finished, wait a bit to see if we get more output or the job finishes
 				goto wait
 			}
 
 			if err != nil {
-				//fmt.Printf("[pto] encountered non-EOF error: %v\n", err)
 				writeTo.CloseWithError(err)
 			}
 		}
-		//fmt.Printf("[pto] no change in size\n")
 
 	wait:
 		time.Sleep(time.Millisecond * 200)

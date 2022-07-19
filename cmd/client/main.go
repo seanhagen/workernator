@@ -69,31 +69,46 @@ func init() {
 		&host, "host", "H", "",
 		"host of the server to connect to, eg 'localhost' or '127.0.0.1'",
 	)
-	jobsCmd.MarkFlagRequired("host")
+	err := jobsCmd.MarkFlagRequired("host")
+	if err != nil {
+		panic(err)
+	}
 
 	jobsCmd.PersistentFlags().StringVarP(
 		&port, "port", "P", "",
 		"port on the server to connect to, should be between 1 and 65,353",
 	)
-	jobsCmd.MarkFlagRequired("port")
+	err = jobsCmd.MarkFlagRequired("port")
+	if err != nil {
+		panic(err)
+	}
 
 	jobsCmd.PersistentFlags().StringVarP(
 		&certPath, "certPath", "c", "",
 		"path to the client mTLS certificate to use for authentication",
 	)
-	jobsCmd.MarkFlagRequired("certPath")
+	err = jobsCmd.MarkFlagRequired("certPath")
+	if err != nil {
+		panic(err)
+	}
 
 	jobsCmd.PersistentFlags().StringVarP(
 		&keyPath, "keyPath", "k", "",
 		"path to the key file used when generating the certificates",
 	)
-	jobsCmd.MarkFlagRequired("keyPath")
+	err = jobsCmd.MarkFlagRequired("keyPath")
+	if err != nil {
+		panic(err)
+	}
 
 	jobsCmd.PersistentFlags().StringVarP(
 		&chainPath, "chainPath", "a", "",
 		"path to the chain pem file used to sign the server certificates",
 	)
-	jobsCmd.MarkFlagRequired("chainPath")
+	err = jobsCmd.MarkFlagRequired("chainPath")
+	if err != nil {
+		panic(err)
+	}
 
 	rootCmd.AddCommand(jobsCmd)
 }

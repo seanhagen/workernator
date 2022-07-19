@@ -30,7 +30,7 @@ type ClientTestSuite struct {
 	client *Client
 	server testServer
 
-	td testDial
+	listener *bufconn.Listener
 }
 
 // startServer sets up and runs a grpc server that will be stopped
@@ -43,7 +43,7 @@ func (cts *ClientTestSuite) startServer() {
 	pb.RegisterServiceServer(srv, &cts.server)
 
 	go func() {
-		if err := srv.Serve(cts.td.listener); err != nil {
+		if err := srv.Serve(cts.listener); err != nil {
 			cts.Error(err)
 		}
 	}()
@@ -55,9 +55,7 @@ func (cts *ClientTestSuite) startServer() {
 
 // SetupTest handles any setup required by ALL the tests in this suite
 func (cts *ClientTestSuite) SetupTest() {
-	cts.td = testDial{
-		listener: bufconn.Listen(bufSize),
-	}
+	conn := bufconn.Listen(bufSize)
 	cts.server = testServer{}
 
 	conf := Config{
@@ -69,7 +67,11 @@ func (cts *ClientTestSuite) SetupTest() {
 		ChainPath: "./testdata/ca.pem",
 
 		DialOpts: []grpc.DialOption{
-			grpc.WithContextDialer(cts.td.dialer),
+			grpc.WithContextDialer(
+				func(ctx context.Context, _ string) (net.Conn, error) {
+					return conn.DialContext(ctx)
+				},
+			),
 		},
 	}
 
@@ -78,29 +80,9 @@ func (cts *ClientTestSuite) SetupTest() {
 	cts.NoError(err)
 	cts.NotNil(client)
 
+	cts.listener = conn
 	cts.client = client
 }
-
-type testDial struct {
-	listener *bufconn.Listener
-}
-
-// dialer  ...
-func (td testDial) dialer(ctx context.Context, _ string) (net.Conn, error) {
-	return td.listener.DialContext(ctx)
-}
-
-type testServer struct {
-	pb.UnimplementedServiceServer
-
-	startHandle func(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error)
-}
-
-// Start ...
-func (ts *testServer) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error) {
-	return ts.startHandle(ctx, req)
-}
-
 func setupServerCerts(t *testing.T, certPath, keyPath, chainPath string) (grpc.ServerOption, error) {
 	t.Helper()
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
@@ -132,4 +114,30 @@ func setupServerCerts(t *testing.T, certPath, keyPath, chainPath string) (grpc.S
 	)
 
 	return creds, nil
+}
+
+// testServer is the fake grpc server used when testing the client
+type testServer struct {
+	pb.UnimplementedServiceServer
+
+	startHandle  func(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error)
+	stopHandle   func(ctx context.Context, req *pb.JobStopRequest) (*pb.Job, error)
+	statusHandle func(ctx context.Context, req *pb.JobStatusRequest) (*pb.Job, error)
+	outputHandle func(req *pb.OutputJobRequest, strm pb.Service_OutputServer) error
+}
+
+func (ts *testServer) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error) {
+	return ts.startHandle(ctx, req)
+}
+
+func (ts *testServer) Stop(ctx context.Context, req *pb.JobStopRequest) (*pb.Job, error) {
+	return ts.stopHandle(ctx, req)
+}
+
+func (ts *testServer) Status(ctx context.Context, req *pb.JobStatusRequest) (*pb.Job, error) {
+	return ts.statusHandle(ctx, req)
+}
+
+func (ts *testServer) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer) error {
+	return ts.outputHandle(req, strm)
 }

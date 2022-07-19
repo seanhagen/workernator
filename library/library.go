@@ -2,13 +2,13 @@ package library
 
 import "fmt"
 
-func NewErrInvalidID(id string, err error) ErrInvalidID {
 // NewErrInvalidID builds a custom ErrInvalidID and returns it
+func NewErrInvalidID(id string, err error) error {
 	return ErrInvalidID{id, err}
 }
 
-func NewErrNoJobForID(id string) ErrNoJobForID {
 // NewErrNoJobForID builds a custom ErrNoJobForID and returns it
+func NewErrNoJobForID(id string) error {
 	return ErrNoJobForID{id}
 }
 

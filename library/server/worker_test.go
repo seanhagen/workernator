@@ -1,4 +1,4 @@
-package worker
+package server
 
 import (
 	"testing"
@@ -7,10 +7,14 @@ import (
 )
 
 func TestWorker_NewService(t *testing.T) {
-	var svc Service
+	var svc *Service
 	var err error
 
 	svc, err = NewService()
 	require.NoError(t, err)
 	require.NotNil(t, svc)
+}
+
+func TestWorker_Service_Start(t *testing.T) {
+
 }

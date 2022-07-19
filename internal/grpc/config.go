@@ -1,4 +1,4 @@
-package internal
+package grpc
 
 import (
 	"crypto/x509"

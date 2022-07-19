@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/seanhagen/workernator/internal/grpc"
 	pb "github.com/seanhagen/workernator/internal/pb"
-	"github.com/seanhagen/workernator/server/internal"
-	"google.golang.org/grpc"
+	"github.com/seanhagen/workernator/library/server"
 )
 
 func main() {
@@ -19,27 +18,33 @@ func main() {
 	chainPath := "./ca.pem"
 
 	// setup config
-	config := internal.Config{
+	config := grpc.Config{
 		Port: port,
 
 		CertPath:  certPath,
 		KeyPath:   keyPath,
 		ChainPath: chainPath,
 
-		ACL: internal.UserPermissions{
-			"admin": internal.RPCPermissions{},
+		ACL: grpc.UserPermissions{
+			"admin": grpc.RPCPermissions{},
 		},
 	}
 
 	// create the server
-	srv, err := internal.NewServer(config)
+	srv, err := grpc.NewServer(config)
 	if err != nil {
 		fmt.Printf("Unable to set up GRPC server: %v\n", err)
 		os.Exit(1)
 	}
 
-	srv.RegisterServerHandler(func(s *grpc.Server) {
-		pb.RegisterServiceServer(s, &skeleton{})
+	service, err := server.NewService()
+	if err != nil {
+		fmt.Printf("Unable to create workernator service: %v\n", err)
+		os.Exit(1)
+	}
+
+	srv.RegisterServerHandler(func(s *grpc.GRPCServer) {
+		pb.RegisterServiceServer(s, service)
 	})
 
 	// get it started!
@@ -50,14 +55,4 @@ func main() {
 	}
 
 	fmt.Printf("Server shutdown complete!\n")
-}
-
-type skeleton struct {
-	pb.UnimplementedServiceServer
-}
-
-// Start  ...
-func (sk *skeleton) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error) {
-	spew.Dump(req)
-	return &pb.Job{Id: "this-is-a-test"}, nil
 }

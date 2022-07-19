@@ -1,4 +1,4 @@
-package internal
+package grpc
 
 import (
 	"fmt"
@@ -12,6 +12,8 @@ import (
 const (
 	handshakeTimeout = time.Second * 10
 )
+
+type GRPCServer = grpc.Server
 
 // GRPCHandler ...
 type GRPCHandler func(*grpc.Server)

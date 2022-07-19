@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"google.golang.org/grpc"
 )
 
@@ -58,8 +57,6 @@ type Config struct {
 
 	// ACL is the set of user permissions the server will use
 	ACL UserPermissions
-
-	LogOpts []grpc_zap.Option
 }
 
 // Valid tests the config to ensure it's valid. If it's not valid, an

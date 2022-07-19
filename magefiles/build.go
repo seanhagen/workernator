@@ -52,7 +52,7 @@ func BuildClient() error {
 func BuildServer() error {
 	mg.SerialDeps(ensureBuildDir, Lint)
 
-	fmt.Print("[BUILD][CLIENT] building server...")
+	fmt.Print("[BUILD][SERVER] building server...")
 
 	binaryOut := buildDir + "/server"
 	err := sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
@@ -62,7 +62,7 @@ func BuildServer() error {
 	}
 	fmt.Println(" SUCCESS")
 
-	fmt.Print("[BUILD][CLIENT] using upx to shrink the binary size... ")
+	fmt.Print("[BUILD][SERVER] using upx to shrink the binary size... ")
 	err = sh.Run("upx", binaryOut)
 	if err != nil {
 		fmt.Println(" ERROR")

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -221,7 +222,7 @@ func pipeToOutput(file *os.File, cmdJob *job, writeTo *io.PipeWriter) {
 		fi, err := file.Stat()
 		if err != nil {
 			x := fmt.Errorf("unable to stat file: %w", err)
-			writeTo.CloseWithError(x)
+			_ = writeTo.CloseWithError(x)
 			return
 		}
 
@@ -231,25 +232,29 @@ func pipeToOutput(file *os.File, cmdJob *job, writeTo *io.PipeWriter) {
 			// if we read anything, first write it to our pipe
 			if n > 0 {
 				lastSize += int64(n)
-				writeTo.Write(buf[:n])
+				_, err = writeTo.Write(buf[:n])
+				if err != nil {
+					_ = writeTo.CloseWithError(err)
+					return
+				}
 			}
 
 			if err == nil && cmdJob.Finished() {
-				writeTo.CloseWithError(io.EOF)
+				_ = writeTo.CloseWithError(io.EOF)
 				return
 			}
 
 			// unable to read from the file because we've reached the end?
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				if cmdJob.Finished() {
-					writeTo.CloseWithError(io.EOF)
+					_ = writeTo.CloseWithError(io.EOF)
 					return
 				}
 				goto wait
 			}
 
 			if err != nil {
-				writeTo.CloseWithError(err)
+				_ = writeTo.CloseWithError(err)
 			}
 		}
 

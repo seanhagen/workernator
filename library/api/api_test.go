@@ -22,10 +22,13 @@ func TestLibrary_NewManager(t *testing.T) {
 		require.NoError(t, os.RemoveAll(path))
 	})
 
+	conf := Config{
+		OutputPath: path,
+	}
+
 	var mng *Manager
 	var err error
-
-	mng, err = NewManager(path)
+	mng, err = NewManager(conf)
 	require.NoError(t, err)
 	require.NotNil(t, mng)
 }
@@ -33,6 +36,9 @@ func TestLibrary_NewManager(t *testing.T) {
 func TestLibrary_Manager_StartJob(t *testing.T) {
 	path := "./testdata/start_job"
 	require.NoError(t, os.MkdirAll(path, 0755))
+	conf := Config{
+		OutputPath: path,
+	}
 
 	cleanup := getLowerCaseEnvVar("TEST_DO_CLEANUP")
 	if cleanup == "" || cleanup == "yes" {
@@ -41,7 +47,7 @@ func TestLibrary_Manager_StartJob(t *testing.T) {
 		})
 	}
 
-	mng, err := NewManager(path)
+	mng, err := NewManager(conf)
 	require.NoError(t, err)
 	require.NotNil(t, mng)
 
@@ -105,8 +111,11 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 			require.NoError(t, os.RemoveAll(path))
 		})
 	}
+	conf := Config{
+		OutputPath: path,
+	}
 
-	mng, err := NewManager(path)
+	mng, err := NewManager(conf)
 	require.NoError(t, err)
 	require.NotNil(t, mng)
 
@@ -162,8 +171,11 @@ func TestLibrary_Manager_JobStatus(t *testing.T) {
 			require.NoError(t, os.RemoveAll(path))
 		})
 	}
+	conf := Config{
+		OutputPath: path,
+	}
 
-	mng, err := NewManager(path)
+	mng, err := NewManager(conf)
 	require.NoError(t, err)
 	require.NotNil(t, mng)
 
@@ -220,16 +232,17 @@ func TestLibrary_Manager_Output(t *testing.T) {
 			require.NoError(t, os.RemoveAll(path))
 		})
 	}
+	conf := Config{
+		OutputPath: path,
+	}
 
-	mng, err := NewManager(path)
+	mng, err := NewManager(conf)
 	require.NoError(t, err)
 	require.NotNil(t, mng)
 
 	ctx := context.TODO()
-	// command := "pwd"
 	command := "cat"
 	args := []string{"testdata/catme"}
-	// args := []string{}
 
 	t.Run("invalid id, should get error", func(t *testing.T) {
 		_, err := mng.GetJobOutput(ctx, "someid")

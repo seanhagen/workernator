@@ -129,7 +129,7 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 		require.Nil(t, job)
 	})
 
-	t.Run("trying to stop a non-existant job should return an error", func(t *testing.T) {
+	t.Run("trying to stop a non-existent job should return an error", func(t *testing.T) {
 		id := xid.New()
 		job, err := mng.StopJob(ctx, id.String())
 		require.Error(t, err)

@@ -3,14 +3,9 @@ package grpc
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-)
-
-const (
-	handshakeTimeout = time.Second * 10
 )
 
 // GRPCServer is a type alias for grpc.Server

@@ -23,6 +23,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -59,21 +60,24 @@ to quickly create a Cobra application.`,
 
 		output, err := apiClient.JobOutput(ctx, args[0])
 		if err != nil {
-			return fmt.Errorf("unable to get job output stream: %v", err)
+			return fmt.Errorf("unable to get job output stream: %w", err)
 		}
 
-		var buf []byte = make([]byte, 1024)
-
+		var buf = make([]byte, 1024)
 		for {
 			n, err := output.Read(buf)
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			if err != nil {
-				return fmt.Errorf("unable to read from output: %v", err)
+				return fmt.Errorf("unable to read from output: %w", err)
 			}
 
-			fmt.Printf("%s", buf[:n])
+			_, err = cmd.OutOrStdout().Write(buf[:n])
+			if err != nil {
+				return fmt.Errorf("unable to write to output: %w", err)
+			}
+
 		}
 
 		return nil

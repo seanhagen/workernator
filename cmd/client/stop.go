@@ -55,9 +55,9 @@ If the job doesn't exist, will return an error.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
 
-		err := apiClient.StopJob(ctx, args[0])
+		resp, err := apiClient.StopJob(ctx, args[0])
 		if err != nil {
-			return fmt.Errorf("unable to stop job: %v", err)
+			return fmt.Errorf("unable to stop job: %w", err)
 		}
 
 		fmt.Printf("stopped job '%v'\n", args[0])

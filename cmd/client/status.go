@@ -91,13 +91,13 @@ to quickly create a Cobra application.`,
 
 		resp, err := apiClient.JobStatus(ctx, args[0])
 		if err != nil {
-			return fmt.Errorf("unable to get job status: %v", err)
+			return fmt.Errorf("unable to get job status: %w", err)
 		}
 
 		data := statusToTemplateData(resp)
 		err = statusT.Execute(os.Stdout, data)
 		if err != nil {
-			return fmt.Errorf("unable to render status: %v", err)
+			return fmt.Errorf("unable to render status: %w", err)
 		}
 
 		return nil

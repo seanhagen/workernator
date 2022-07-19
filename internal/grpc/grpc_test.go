@@ -70,7 +70,9 @@ func TestInternal_NewServer(t *testing.T) {
 	}()
 
 	t.Cleanup(func() {
-		server.stop(ctx)
+		if err := server.stop(ctx); err != nil {
+			t.Errorf("error stopping server: %v", err)
+		}
 	})
 
 	tlsDialOpt, err := setupClientCerts(t, "./testdata/client.pem", "./testdata/cakey.key", "./testdata/ca.pem")

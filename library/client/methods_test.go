@@ -24,5 +24,5 @@ func (cts *ClientTestSuite) TestStart() {
 	job, err := cts.client.StartJob(ctx, "testing", "one", "two")
 	cts.NoError(err)
 	cts.NotNil(job)
-	cts.Equal(expectID, job.ID)
+	cts.Equal(expectID, job.ID())
 }

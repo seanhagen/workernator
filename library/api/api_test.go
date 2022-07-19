@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/rs/xid"
-	pb "github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,7 +96,7 @@ func TestLibrary_Manager_StartJob(t *testing.T) {
 		assert.Equal(t, args, job.Arguments())
 
 		assert.NoError(t, job.Wait())
-		assert.Equal(t, pb.JobStatus_Finished.String(), job.Status())
+		assert.Equal(t, library.Finished, job.Status())
 	})
 }
 
@@ -146,7 +145,7 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 			status, err := mng.StopJob(ctx, job.ID())
 			require.NoError(t, err)
 			require.NotNil(t, status)
-			assert.Equal(t, pb.JobStatus_Stopped.String(), status.Status())
+			assert.Equal(t, library.Stopped, status.Status())
 		},
 	)
 
@@ -157,7 +156,7 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 
 		err = job.Stop()
 		require.NoError(t, err)
-		assert.Equal(t, pb.JobStatus_Stopped.String(), job.Status())
+		assert.Equal(t, library.Stopped, job.Status())
 	})
 }
 

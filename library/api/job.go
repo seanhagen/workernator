@@ -4,9 +4,11 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/seanhagen/workernator/internal/pb"
+	"github.com/seanhagen/workernator/library"
 )
 
 // job fulfills the library.Job interface ( and so fulfils the
@@ -17,6 +19,8 @@ type job struct {
 
 	command string
 	args    []string
+	started time.Time
+	ended   time.Time
 
 	cmd  *exec.Cmd
 	done context.Context
@@ -34,8 +38,8 @@ func (ji job) ID() string {
 	return ji.id.String()
 }
 
-func (ji job) Status() string {
-	return ji.status.String()
+func (ji job) Status() library.JobStatus {
+	return library.JobStatus(ji.status.Number())
 }
 
 func (ji job) Command() string {
@@ -48,6 +52,16 @@ func (ji job) Arguments() []string {
 
 func (ji job) Error() error {
 	return ji.err
+}
+
+// Started  ...
+func (ji job) Started() time.Time {
+	return ji.started
+}
+
+// Ended  ...
+func (ji job) Ended() time.Time {
+	return ji.ended
 }
 
 func (ji job) Finished() bool {

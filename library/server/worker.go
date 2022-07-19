@@ -20,10 +20,10 @@ var kingLear string
 // Manager is the interface expected by the service that it'll use to
 // manage jobs on behalf of callers.
 type Manager interface {
-	StartJob(ctx context.Context, cmd string, args ...string) (library.Job, error)
-	StopJob(ctx context.Context, id string) (library.Job, error)
-	JobStatus(ctx context.Context, id string) (library.Job, error)
-	JobOutput(ctx context.Context, id string) (io.Reader, error)
+	StartJob(context.Context, string, ...string) (library.Job, error)
+	StopJob(context.Context, string) (library.JobInfo, error)
+	JobStatus(context.Context, string) (library.JobInfo, error)
+	GetJobOutput(context.Context, string) (io.Reader, error)
 }
 
 // Service is the implementation of the Workernator GRPC service

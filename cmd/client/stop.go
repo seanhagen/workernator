@@ -60,26 +60,14 @@ If the job doesn't exist, will return an error.`,
 			return fmt.Errorf("unable to stop job: %w", err)
 		}
 
-		if resp.Err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "job reported error: %s\n", resp.Err.Error())
+		if resp.Error() != nil {
+			_, _ = fmt.Fprintf(cmd.OutOrStderr(), "job reported error: %s\n", resp.Error().Error())
 		}
-
-		fmt.Fprintf(cmd.OutOrStdout(), "stopped job '%v'\n", args[0])
-
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "stopped job '%v'\n", args[0])
 		return nil
 	},
 }
 
 func init() {
 	jobsCmd.AddCommand(stopCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// stopCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// stopCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

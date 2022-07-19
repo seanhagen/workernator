@@ -14,7 +14,7 @@ import (
 
 // StartJob reaches out to the server to ask it to run a command for
 // us as a job.
-func (c *Client) StartJob(ctx context.Context, command string, arguments ...string) (library.Job, error) {
+func (c *Client) StartJob(ctx context.Context, command string, arguments ...string) (library.JobInfo, error) {
 	req := pb.JobStartRequest{
 		Command:   command,
 		Arguments: arguments,
@@ -36,7 +36,7 @@ func (c *Client) StartJob(ctx context.Context, command string, arguments ...stri
 // This function is idempotent, it can be called multiple times with
 // the same ID ( so long as it's a valid ID ) and it will return the
 // same result.
-func (c *Client) StopJob(ctx context.Context, id string) (library.Job, error) {
+func (c *Client) StopJob(ctx context.Context, id string) (library.JobInfo, error) {
 	_, err := xid.FromString(id)
 	if err != nil {
 		return nil, fmt.Errorf("'%s' is not a valid ID: %w", id, err)
@@ -54,7 +54,7 @@ func (c *Client) StopJob(ctx context.Context, id string) (library.Job, error) {
 // JobStatus reaches out to the server to ask for the status of a
 // job. If the ID given is either invalid or doesn't map to a job, an
 // error will be returned.
-func (c *Client) JobStatus(ctx context.Context, id string) (library.Job, error) {
+func (c *Client) JobStatus(ctx context.Context, id string) (library.JobInfo, error) {
 	_, err := xid.FromString(id)
 	if err != nil {
 		return nil, fmt.Errorf("'%s' is not a valid ID: %w", id, err)
@@ -113,25 +113,25 @@ func (c *Client) JobOutput(ctx context.Context, id string) (io.Reader, error) {
 	return read, nil
 }
 
-func grpcJobToClientJob(resp *pb.Job) *JobResponse {
+func grpcJobToClientJob(resp *pb.Job) *jobResponse {
 	var jobErr error
 	errMsg := strings.TrimSpace(resp.GetErrorMsg())
 	if errMsg != "" {
 		jobErr = fmt.Errorf(errMsg)
 	}
 
-	out := JobResponse{
-		ID:      resp.GetId(),
-		Status:  JobStatus(resp.GetStatus().Number()),
-		Cmd:     resp.GetCommand(),
-		Args:    resp.GetArgs(),
-		Err:     jobErr,
-		Started: resp.GetStartedAt().AsTime(),
+	out := jobResponse{
+		id:      resp.GetId(),
+		status:  library.JobStatus(resp.GetStatus().Number()),
+		cmd:     resp.GetCommand(),
+		args:    resp.GetArgs(),
+		err:     jobErr,
+		started: resp.GetStartedAt().AsTime(),
 	}
 
 	if resp.EndedAt != nil {
 		tm := resp.GetEndedAt().AsTime()
-		out.Ended = tm
+		out.ended = tm
 	}
 
 	return &out

@@ -52,7 +52,7 @@ view what arguments are required.`,
 			return fmt.Errorf("unable to start job: %w", err)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "job started, id: %v\n", job.ID)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "job started, id: %s\n", job.ID())
 		return nil
 	},
 }

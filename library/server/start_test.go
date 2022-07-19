@@ -7,7 +7,8 @@ import (
 )
 
 func TestWorker_Start(t *testing.T) {
-	svc, err := NewService()
+	mgr := testManager{}
+	svc, err := NewService(mgr)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 }

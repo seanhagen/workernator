@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/seanhagen/workernator/library/client"
+	"github.com/seanhagen/workernator/library"
 	"github.com/spf13/cobra"
 )
 
@@ -104,35 +104,35 @@ to quickly create a Cobra application.`,
 	},
 }
 
-func statusToTemplateData(resp *client.JobResponse) statusTemplateData {
+func statusToTemplateData(resp library.JobInfo) statusTemplateData {
 	out := statusTemplateData{
-		ID:        resp.ID,
-		Command:   resp.Cmd,
-		Arguments: strings.Join(resp.Args, ", "),
-		Started:   resp.Started.Format(time.RFC3339),
+		ID:        resp.ID(),
+		Command:   resp.Command(),
+		Arguments: strings.Join(resp.Arguments(), ", "),
+		Started:   resp.Started().Format(time.RFC3339),
 	}
 
-	switch resp.Status {
-	case client.Running:
+	switch resp.Status() {
+	case library.Running:
 		out.Status = "Running"
-	case client.Failed:
+	case library.Failed:
 		out.Status = "Failed"
-	case client.Finished:
+	case library.Finished:
 		out.Status = "Finished"
-	case client.Stopped:
+	case library.Stopped:
 		out.Status = "Stopped"
-	case client.Unknown:
+	case library.Unknown:
 		fallthrough
 	default:
 		out.Status = "Unknown"
 	}
 
-	if !resp.Ended.IsZero() {
-		out.Ended = resp.Ended.Format(time.RFC3339)
+	if !resp.Ended().IsZero() {
+		out.Ended = resp.Ended().Format(time.RFC3339)
 	}
 
-	if resp.Err != nil {
-		out.Error = resp.Err.Error()
+	if resp.Error() != nil {
+		out.Error = resp.Error().Error()
 	}
 	return out
 }

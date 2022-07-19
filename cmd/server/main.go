@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/seanhagen/workernator/internal/grpc"
 	pb "github.com/seanhagen/workernator/internal/pb"
+	"github.com/seanhagen/workernator/library/api"
 	"github.com/seanhagen/workernator/library/server"
 	"go.uber.org/zap"
 )
@@ -15,6 +18,12 @@ func main() {
 	certPath := "./server.pem"
 	keyPath := "./ca.key"
 	chainPath := "./ca.pem"
+
+	outputPath, err := os.MkdirTemp("/tmp", "workernator")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "unable to create temporary directory for job output: %v", err)
+		os.Exit(1)
+	}
 
 	// setup config
 	config := grpc.Config{
@@ -54,8 +63,17 @@ func main() {
 		zap.L().Fatal("Unable to set up GRPC server", zap.Error(err))
 	}
 
+	managerConfig := api.Config{
+		OutputPath: outputPath,
+	}
+
+	manager, err := api.NewManager(managerConfig)
+	if err != nil {
+		zap.L().Fatal("Unable to set up job manager", zap.Error(err))
+	}
+
 	// create the actual service that properly handles requests
-	service, err := server.NewService()
+	service, err := server.NewService(manager)
 	if err != nil {
 		zap.L().Fatal("Unable to create workernator service", zap.Error(err))
 	}

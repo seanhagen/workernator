@@ -81,6 +81,7 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	cmd.Stderr = stderrFile
 
 	if err := cmd.Start(); err != nil {
+		cancel()
 		return nil, err
 	}
 

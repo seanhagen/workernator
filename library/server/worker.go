@@ -74,7 +74,7 @@ func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer)
 	// when it's reading the output of a job
 	kingLearBuffer := bytes.NewBufferString(kingLear)
 
-	var buf []byte = make([]byte, 1024)
+	var buf = make([]byte, 1024)
 
 	for {
 		n, err := kingLearBuffer.Read(buf)

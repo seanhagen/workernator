@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"google.golang.org/grpc"
 )
 
@@ -34,7 +35,8 @@ type UserPermissions map[string]RPCPermissions
 
 // Config ...
 type Config struct {
-	Port string
+	DevMode bool
+	Port    string
 
 	CertPath  string
 	KeyPath   string
@@ -46,6 +48,8 @@ type Config struct {
 	}
 
 	ACL UserPermissions
+
+	LogOpts []grpc_zap.Option
 }
 
 // Valid ...

@@ -3,8 +3,8 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"log"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -32,7 +32,7 @@ func UnaryPanicMiddleware(ctx context.Context, req interface{},
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic during call: %v", r)
-			log.Printf("caught panic! error: %v", err)
+			zap.L().Error("caught panic", zap.Error(err))
 		}
 	}()
 
@@ -44,7 +44,7 @@ func StreamPanicMiddleware(srv interface{}, stream grpc.ServerStream,
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic during stream: %v", r)
-			log.Printf("caught panic in stream! error: %v", err)
+			zap.L().Error("caught panic", zap.Error(err))
 		}
 	}()
 

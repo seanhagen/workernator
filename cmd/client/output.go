@@ -22,35 +22,74 @@ THE SOFTWARE.
 package main
 
 import (
+	"context"
+	"fmt"
+	"io"
+
+	"github.com/rs/xid"
 	"github.com/spf13/cobra"
 )
 
-// jobsCmd represents the jobs command
-var jobsCmd = &cobra.Command{
-	Use:   "jobs",
-	Short: "Sub-command for interacting with jobs",
-	Long: `This sub-command provides the ability to manage jobs, including
-starting, stopping, getting the status, and viewing the output.`,
+// outputCmd represents the output command
+var outputCmd = &cobra.Command{
+	Use:   "output",
+	Short: "View the output of a command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
 
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) <= 0 {
+			return fmt.Errorf("id argument is required")
+		}
+
+		_, err := xid.FromString(args[0])
+		if err != nil {
+			return fmt.Errorf("first argument must be valid xid")
+		}
+
+		return nil
+	},
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		output, err := apiClient.JobOutput(ctx, args[0])
+		if err != nil {
+			return fmt.Errorf("unable to get job output stream: %v", err)
+		}
+
+		var buf []byte = make([]byte, 1024)
+
+		for {
+			n, err := output.Read(buf)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("unable to read from output: %v", err)
+			}
+
+			fmt.Printf("%s", buf[:n])
+		}
 
 		return nil
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(jobsCmd)
-
-	jobsCmd.PersistentFlags().StringP("host", "H", "", "host & port of the workernator server to connect to, eg 'localhost:8080' or '127.0.0.1:9090'")
-	jobsCmd.PersistentFlags().StringP("certPath", "c", "", "path to the client mTLS certificate to use for authentication")
+	jobsCmd.AddCommand(outputCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// jobsCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// outputCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// jobsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// outputCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

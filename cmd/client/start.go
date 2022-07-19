@@ -22,29 +22,41 @@ THE SOFTWARE.
 package main
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
-	Use:   "start",
+	Use:   "start [command] [arguments...]",
 	Short: "Start a job in the server",
 	Long: `Use this command to request a job be started on the server.
 
 Each job has it's own set of arguments, so see each sub-command to
 view what arguments are required.`,
+
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) <= 0 {
+			return fmt.Errorf("id argument is required")
+		}
+		return nil
+	},
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		job, err := apiClient.StartJob(ctx, args[0], args[1:]...)
+		if err != nil {
+			return fmt.Errorf("unable to start job: %w", err)
+		}
+
+		fmt.Printf("job started, id: %v\n", job.ID)
+		return nil
+	},
 }
 
 func init() {
 	jobsCmd.AddCommand(startCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// startCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// startCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

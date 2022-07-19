@@ -11,3 +11,4 @@ testdata/busyboxfs
 /server/cakey.key
 /server/server
 /server/server.pem
+/build/

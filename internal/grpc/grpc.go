@@ -41,7 +41,7 @@ func NewServer(conf Config) (*Server, error) {
 		config: conf,
 	}
 
-	setupLogging()
+	setupLogging(&conf)
 
 	mtlsConfig, err := setupCerts(conf)
 	if err != nil {

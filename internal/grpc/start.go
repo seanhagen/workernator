@@ -6,11 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"go.uber.org/zap"
 )
 
 // Start  ...
 func (s *Server) Start(ctx context.Context) error {
-	fmt.Printf("Launching GRPC server on port '%v'\n", s.config.Port)
+	zap.L().Info("launching grpc server", zap.String("port", s.config.Port))
 
 	sigChan := make(chan os.Signal, 1)
 	errChan := make(chan error)
@@ -24,12 +26,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 	select {
 	case <-sigChan:
-		fmt.Printf("got signal to exit!\n")
+		zap.L().Info("received signal to exit")
 	case err := <-errChan:
-		fmt.Printf("server encountered error during runtime: %v\n", err)
+		zap.L().Error("server encountered error during runtime, shutting down", zap.Error(err))
 	}
 
-	fmt.Printf("Server stopped!\n")
+	zap.L().Info("server stopping")
 	return s.stop(ctx)
 }
 
@@ -58,7 +60,7 @@ func (s *Server) runGRPC(ctx context.Context, errChan chan<- error) {
 		}
 	}
 
-	fmt.Printf("GRPC server stopped\n")
+	zap.L().Info("grpc server stopped")
 }
 
 // stop ...

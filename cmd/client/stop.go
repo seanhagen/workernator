@@ -22,22 +22,47 @@ THE SOFTWARE.
 package main
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/rs/xid"
 	"github.com/spf13/cobra"
 )
 
 // stopCmd represents the stop command
 var stopCmd = &cobra.Command{
-	Use:   "stop",
+	Use:   "stop [id]",
 	Short: "Stop a running job",
 	Long: `Asks the server to stop the job belonging to the ID provided.
 
 Doesn't do anything if the job isn't running, returns successfully.
 
 If the job doesn't exist, will return an error.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("stop called")
+
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) <= 0 {
+			return fmt.Errorf("id argument is required")
+		}
+
+		_, err := xid.FromString(args[0])
+		if err != nil {
+			return fmt.Errorf("first argument must be valid xid")
+		}
+
+		return nil
+	},
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		err := apiClient.StopJob(ctx, args[0])
+		if err != nil {
+			return fmt.Errorf("unable to stop job: %v", err)
+		}
+
+		fmt.Printf("stopped job '%v'\n", args[0])
+
+		return nil
 	},
 }
 

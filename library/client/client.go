@@ -7,14 +7,38 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	pb "github.com/seanhagen/workernator/internal/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-type Job interface {
-	ID() string
+// JobStatus ...
+type JobStatus int
+
+const (
+	// Unknown ...
+	Unknown JobStatus = 0
+	// Running ...
+	Running = 1
+	// Failed ...
+	Failed = 2
+	// Finished ...
+	Finished = 3
+	// Stopped ...
+	Stopped = 4
+)
+
+// JobResponse ...
+type JobResponse struct {
+	ID      string
+	Status  JobStatus
+	Cmd     string
+	Args    []string
+	Err     error
+	Started time.Time
+	Ended   time.Time
 }
 
 // Client ...

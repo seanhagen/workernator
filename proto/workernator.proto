@@ -30,8 +30,9 @@ message Job {
   string id = 1;
   
   JobStatus status = 10;
-  repeated string args = 11;
-  string error_msg = 12;
+  string command = 11;
+  repeated string args = 12;
+  string error_msg = 13;
 
   google.protobuf.Timestamp started_at = 21;
   google.protobuf.Timestamp ended_at = 22;

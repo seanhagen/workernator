@@ -221,7 +221,6 @@ func pipeToOutput(file *os.File, cmdJob *job, writeTo *io.PipeWriter) {
 		fi, err := file.Stat()
 		if err != nil {
 			x := fmt.Errorf("unable to stat file: %w", err)
-			// clientReader.CloseWithError(x)
 			writeTo.CloseWithError(x)
 			return
 		}

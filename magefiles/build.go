@@ -4,7 +4,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
@@ -13,65 +15,76 @@ import (
 // All does what it says on the tin: builds the client & server
 // binaries, and generates the TLS certificates
 func All() error {
-	mg.Deps(Test, Build, Certificates)
+	mg.SerialDeps(Lint, Test, Certificates, Build)
 	return nil
 }
 
 // Build generates both the server and CLI client binaries
 func Build() error {
-	mg.Deps(BuildServer, BuildClient)
+	mg.SerialDeps(BuildServer, BuildClient)
 	return nil
 }
 
 // BuildClient builds the CLI client binary
 func BuildClient() error {
-	mg.Deps(ensureBuildDir)
+	mg.SerialDeps(ensureBuildDir, Lint)
 
-	fmt.Println("[BUILD][CLIENT] building client...")
-
+	fmt.Print("[BUILD][CLIENT] building client...")
 	binaryOut := buildDir + "/client"
 	err := sh.Run("go", "build", "-o", binaryOut, "./cmd/client")
 	if err != nil {
-		fmt.Printf(" ERROR\n")
+		fmt.Println(" ERROR")
 		return err
 	}
+	fmt.Println(" SUCCESS")
+
+	fmt.Print("[BUILD][CLIENT] using upx to shrink the binary size")
+	err = sh.Run("upx", binaryOut)
+	if err != nil {
+		fmt.Println(" ERROR")
+		return err
+	}
+	fmt.Println(" SUCCESS")
 	return nil
 }
 
 // BuildServer builds the server binary
 func BuildServer() error {
-	mg.Deps(ensureBuildDir)
+	mg.SerialDeps(ensureBuildDir, Lint)
 
-	fmt.Println("building server...")
+	fmt.Print("[BUILD][CLIENT] building server...")
 
 	binaryOut := buildDir + "/server"
-	return sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
+	err := sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
+	if err != nil {
+		fmt.Println(" ERROR")
+		return err
+	}
+	fmt.Println(" SUCCESS")
+
+	fmt.Print("[BUILD][CLIENT] using upx to shrink the binary size... ")
+	err = sh.Run("upx", binaryOut)
+	if err != nil {
+		fmt.Println(" ERROR")
+		return err
+	}
+	fmt.Println(" SUCCESS")
+	return nil
 }
 
-// // A build step that requires additional params, or platform specific steps for example
-// func Build() error {
-// 	mg.Deps(InstallDeps)
-// 	fmt.Println("Building...")
-// 	cmd := exec.Command("go", "build", "-o", "MyApp", ".")
-// 	return cmd.Run()
-// }
+// Lint runs golangci-lint on the code
+func Lint() error {
+	stdOut := bytes.NewBuffer(nil)
+	stdErr := bytes.NewBuffer(nil)
 
-// // A custom install step if you need your bin someplace other than go/bin
-// func Install() error {
-// 	mg.Deps(Build)
-// 	fmt.Println("Installing...")
-// 	return os.Rename("./MyApp", "/usr/bin/MyApp")
-// }
-
-// // Manage your deps, or running package managers.
-// func InstallDeps() error {
-// 	fmt.Println("Installing Deps...")
-// 	cmd := exec.Command("go", "get", "github.com/stretchr/piglatin")
-// 	return cmd.Run()
-// }
-
-// // Clean up after yourself
-// func Clean() {
-// 	fmt.Println("Cleaning...")
-// 	os.RemoveAll("MyApp")
-// }
+	fmt.Fprintf(os.Stdout, "[BUILD][LINT] linting the code...")
+	_, err := sh.Exec(nil, stdOut, stdErr, "golangci-lint", "run", "-v", "-c", ".golangci.yml", "./...")
+	if err != nil {
+		fmt.Fprintf(os.Stdout, " ERROR!\n")
+		fmt.Fprintf(os.Stdout, stdOut.String())
+		fmt.Fprintf(os.Stderr, stdErr.String())
+		return err
+	}
+	fmt.Fprintf(os.Stdout, " SUCCESS!\n")
+	return nil
+}

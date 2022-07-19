@@ -4,7 +4,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -14,7 +16,7 @@ import (
 
 // Certificates is a shortcut for running ServerCertificates & ClientCertificates
 func Certificates() error {
-	mg.Deps(CACert, ServerCerts, ClientCerts)
+	mg.SerialDeps(CACert, ServerCerts, ClientCerts)
 	return nil
 }
 
@@ -46,23 +48,35 @@ func CACert() error {
 	pemPath := buildDir + "/ca.pem"
 	configPath := "config/csr.conf"
 
-	fmt.Printf("[CERT][CA] generating CA certificate '%v'\n", pemPath)
+	fmt.Fprintf(os.Stdout, "[CERT][CA] generating CA certificate '%v'...", pemPath)
+
+	stdOut := bytes.NewBuffer(nil)
+	stdErr := bytes.NewBuffer(nil)
 
 	// generates the key file using:
 	//   openssl ecparam -name prime256v1 -genkey -noout -out cakey.key
-	err := sh.Run("openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", keyPath)
+	_, err := sh.Exec(nil, stdOut, stdErr, "openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", keyPath)
 	if err != nil {
+		fmt.Fprintf(os.Stdout, " ERROR: %v\n", err)
+		fmt.Fprintf(os.Stdout, stdOut.String())
+		fmt.Fprintf(os.Stderr, stdErr.String())
 		return fmt.Errorf("unable to generate CA key: %v", err)
 	}
 
+	stdOut.Truncate(0)
+	stdErr.Truncate(0)
+
 	// generate the certificate file using:
 	//   openssl req -x509 -new -nodes -config csr.conf -key cakey.key -days 730 -out ca.pem
-	err = sh.Run("openssl", "req", "-x509", "-new", "-nodes", "-config", configPath, "-key", keyPath, "-days", "730", "-out", pemPath)
+	_, err = sh.Exec(nil, stdOut, stdErr, "openssl", "req", "-x509", "-new", "-nodes",
+		"-config", configPath, "-key", keyPath, "-days", "730", "-out", pemPath)
 	if err != nil {
+		fmt.Fprintf(os.Stdout, " ERROR: %v\n", err)
+		fmt.Fprintf(os.Stdout, stdOut.String())
+		fmt.Fprintf(os.Stderr, stdErr.String())
 		return fmt.Errorf("unable to generate CA certificate: %v", err)
 	}
-
-	fmt.Printf("[CERT][CA] done!\n")
+	fmt.Fprintf(os.Stdout, " SUCCESS\n")
 
 	return nil
 }
@@ -75,16 +89,23 @@ func generateCertificate(certFor string, isClient bool) error {
 		config = "config/csrclient.conf"
 	}
 
-	fmt.Printf(
-		"[CERT][%v] generating certificate using config '%v'\n",
-		strings.ToUpper(certFor), config,
+	fmt.Fprintf(
+		os.Stdout,
+		"[CERT][%s] generating certificate using config '%s'",
+		strings.ToUpper(certFor),
+		config,
 	)
 
 	keyPath := buildDir + "/ca.key"
 	csrPath := buildDir + "/" + certFor + ".csr"
-	err := sh.Run("openssl", "req", "-new", "-key", keyPath,
+	stdOut := bytes.NewBuffer(nil)
+	stdErr := bytes.NewBuffer(nil)
+	_, err := sh.Exec(nil, stdOut, stdErr, "openssl", "req", "-new", "-key", keyPath,
 		"-out", csrPath, "-config", config)
 	if err != nil {
+		fmt.Fprintf(os.Stdout, " ERROR: %v\n", err)
+		fmt.Fprintf(os.Stdout, stdOut.String())
+		fmt.Fprintf(os.Stderr, stdErr.String())
 		return fmt.Errorf("unable to generate client csr: %v", err)
 	}
 
@@ -92,10 +113,15 @@ func generateCertificate(certFor string, isClient bool) error {
 	caPemPath := buildDir + "/ca.pem"
 
 	pemPath := buildDir + "/" + certFor + ".pem"
-	err = sh.Run("openssl", "x509", "-req", "-in", csrPath, "-CA", caPemPath,
+	stdOut.Truncate(0)
+	stdErr.Truncate(0)
+	_, err = sh.Exec(nil, io.Discard, stdErr, "openssl", "x509", "-req", "-in", csrPath, "-CA", caPemPath,
 		"-CAkey", caKeyPath, "-CAcreateserial", "-out", pemPath, "-days", "90",
 		"-extfile", config, "-extensions", "req_ext")
 	if err != nil {
+		fmt.Fprintf(os.Stdout, " ERROR: %v\n", err)
+		fmt.Fprintf(os.Stdout, stdOut.String())
+		fmt.Fprintf(os.Stderr, stdErr.String())
 		return fmt.Errorf("unable to build '%v', encountered error: %v", pemPath, err)
 	}
 
@@ -104,6 +130,6 @@ func generateCertificate(certFor string, isClient bool) error {
 		return fmt.Errorf("unable to remove '%v', encountered error: %v", csrPath, err)
 	}
 
-	fmt.Printf("[CERT][%v] done generating certificate\n", strings.ToUpper(certFor))
+	fmt.Printf(" SUCCESS\n")
 	return nil
 }

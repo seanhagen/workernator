@@ -11,13 +11,20 @@ import (
 const buildDir string = "build"
 
 func ensureBuildDir() error {
-	fmt.Printf("Creating output build directory '%v'\n", buildDir)
+	fmt.Fprintf(os.Stdout, "[PREP] Checking for build output directory '%v'...", buildDir)
 	st, err := os.Stat(buildDir)
 	if os.IsNotExist(err) {
-		return os.Mkdir(buildDir, 0755)
+		fmt.Fprintf(os.Stdout, " build output directory doesn't exist, creating '%v'...", buildDir)
+		if err := os.Mkdir(buildDir, 0755); err != nil {
+			fmt.Fprintf(os.Stdout, " ERROR: %v\n", err)
+			return err
+		}
+		fmt.Fprintf(os.Stdout, " SUCCESS\n")
+		return nil
 	}
 
 	if st.IsDir() {
+		fmt.Fprintf(os.Stdout, " build output directory exists, done\n")
 		return nil
 	}
 

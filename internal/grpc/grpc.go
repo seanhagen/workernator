@@ -39,7 +39,9 @@ func NewServer(conf Config) (*Server, error) {
 		config: conf,
 	}
 
-	setupLogging(&conf)
+	if err := setupLogging(&conf); err != nil {
+		return nil, fmt.Errorf("unable to setup logging: %w", err)
+	}
 
 	mtlsConfig, err := setupCerts(conf)
 	if err != nil {

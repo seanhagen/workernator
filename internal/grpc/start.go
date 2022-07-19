@@ -53,12 +53,13 @@ func (s *Server) runGRPC(ctx context.Context, errChan chan<- error) {
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			goto done
 		case <-done:
-			break
+			goto done
 		}
 	}
 
+done:
 	zap.L().Info("grpc server stopped")
 }
 

@@ -63,7 +63,7 @@ func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer)
 		return fmt.Errorf("unable to send to client: %w", err)
 	}
 
-	strm.Send(&pb.OutputJobResponse{
+	err = strm.Send(&pb.OutputJobResponse{
 		Data: []byte("this method doesn't do anything yet, so have all of king lear as an html file.\n\n\n"),
 	})
 	if err != nil {

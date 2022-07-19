@@ -1,21 +1,16 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	_ "embed"
 	"fmt"
 	"io"
-	"time"
+	"strings"
 
 	"github.com/rs/xid"
 	pb "github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-//go:embed king_lear.html
-var kingLear string
 
 // Manager is the interface expected by the service that it'll use to
 // manage jobs on behalf of callers.
@@ -39,45 +34,88 @@ func NewService(mgr Manager) (*Service, error) {
 	return &Service{manager: mgr}, nil
 }
 
+func jobinfoToProtobuf(in library.JobInfo) *pb.Job {
+	out := &pb.Job{
+		Id:        in.ID(),
+		Status:    pb.JobStatus(in.Status()),
+		Command:   in.Command(),
+		Args:      in.Arguments(),
+		StartedAt: timestamppb.New(in.Started()),
+	}
+
+	if in.Error() != nil {
+		out.ErrorMsg = in.Error().Error()
+	}
+
+	if !in.Ended().IsZero() {
+		out.EndedAt = timestamppb.New(in.Ended())
+	}
+
+	return out
+}
+
 // Start handles starting a job
 func (s *Service) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, error) {
-	return debugOutput(), nil
+	job, err := s.manager.StartJob(ctx, req.GetCommand(), req.GetArguments()...)
+	if err != nil {
+		return nil, err
+	}
+	return jobinfoToProtobuf(job), nil
 }
 
 // Stop handles stopping a job
 func (s *Service) Stop(ctx context.Context, req *pb.JobStopRequest) (*pb.Job, error) {
-	return debugOutput(), nil
+	tmp := strings.TrimSpace(req.GetId())
+	id, err := xid.FromString(tmp)
+	if err != nil {
+		// also set the response code to codes.InvalidArguments
+		return nil, err
+	}
+
+	job, err := s.manager.StopJob(ctx, id.String())
+	if err != nil {
+		return nil, err
+	}
+
+	return jobinfoToProtobuf(job), nil
 }
 
 // Status handles returning the status of any running or finished jobs
 func (s *Service) Status(ctx context.Context, req *pb.JobStatusRequest) (*pb.Job, error) {
-	return debugOutput(), nil
+	tmp := strings.TrimSpace(req.GetId())
+	id, err := xid.FromString(tmp)
+	if err != nil {
+		// also set the response code to codes.InvalidArguments
+		return nil, err
+	}
+
+	job, err := s.manager.JobStatus(ctx, id.String())
+	if err != nil {
+		return nil, err
+	}
+
+	return jobinfoToProtobuf(job), nil
 }
 
 // Output handles streaming the output of any running or finished jobs
 func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer) error {
-	err := strm.Send(&pb.OutputJobResponse{
-		Data: []byte("thanks for asking for the output of job '" + req.GetId() + "'\n"),
-	})
+	tmp := strings.TrimSpace(req.GetId())
+	id, err := xid.FromString(tmp)
 	if err != nil {
-		return fmt.Errorf("unable to send to client: %w", err)
+		// also set the response code to codes.InvalidArguments
+		return err
 	}
 
-	err = strm.Send(&pb.OutputJobResponse{
-		Data: []byte("this method doesn't do anything yet, so have all of king lear as an html file.\n\n\n"),
-	})
+	output, err := s.manager.GetJobOutput(strm.Context(), id.String())
 	if err != nil {
-		return fmt.Errorf("unable to send to client: %w", err)
+		// also set the response code to codes.Internal
+		return err
 	}
-
-	// this buffer will be swapped out with the io.Reader we get from the library
-	// when it's reading the output of a job
-	kingLearBuffer := bytes.NewBufferString(kingLear)
 
 	var buf = make([]byte, 1024)
 
 	for {
-		n, err := kingLearBuffer.Read(buf)
+		n, err := output.Read(buf)
 		if err == io.EOF {
 			break
 		}
@@ -92,21 +130,4 @@ func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer)
 	}
 
 	return nil
-}
-
-func debugOutput() *pb.Job {
-	id := xid.New()
-	ended := time.Now()
-	started := ended.Add(time.Minute * -1)
-
-	return &pb.Job{
-		Id:       id.String(),
-		Status:   pb.JobStatus_Finished,
-		Command:  "echo",
-		Args:     []string{"hello world"},
-		ErrorMsg: "",
-
-		StartedAt: timestamppb.New(started),
-		EndedAt:   timestamppb.New(ended),
-	}
 }

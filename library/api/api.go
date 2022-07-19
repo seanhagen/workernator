@@ -33,20 +33,20 @@ type Manager struct {
 	jobs    map[xid.ID]*job
 	jobLock sync.Mutex
 
-	tmpDir string
+	outputDir string
 }
 
-// NewManager ...
-func NewManager(pathToTempRoot string) (*Manager, error) {
-	tmp, err := os.MkdirTemp(pathToTempRoot, "workernator-manager")
+// NewManager builds a new Manager, and sets up any necessary directories
+func NewManager(conf Config) (*Manager, error) {
+	err := os.MkdirAll(conf.OutputPath, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("unable to set up temporary directory: %w", err)
+		return nil, fmt.Errorf("unable to set up directory: %w", err)
 	}
 
 	manager := &Manager{
-		jobs:    map[xid.ID]*job{},
-		tmpDir:  tmp,
-		jobLock: sync.Mutex{},
+		jobs:      map[xid.ID]*job{},
+		outputDir: conf.OutputPath,
+		jobLock:   sync.Mutex{},
 	}
 
 	return manager, nil
@@ -59,7 +59,7 @@ func NewManager(pathToTempRoot string) (*Manager, error) {
 func (m *Manager) StartJob(ctx context.Context, command string, args ...string) (library.Job, error) {
 	id := xid.New()
 
-	jobOutputDir := m.tmpDir + "/" + id.String()
+	jobOutputDir := m.outputDir + "/" + id.String()
 	if err := os.MkdirAll(jobOutputDir, 0755); err != nil {
 		return nil, fmt.Errorf("unable to create job output directory: %w", err)
 	}
@@ -175,17 +175,14 @@ func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.Reader, error
 	if err != nil {
 		return nil, err
 	}
-	//fmt.Printf("job %v is valid\n", id)
-
-	path := m.tmpDir + "/" + job.ID() + "/output"
-	//fmt.Printf("reading output from '%v'\n", path)
-
 	// this is the cool bit
 	read, write := io.Pipe()
-	f, err := os.OpenFile(path, os.O_RDONLY, 0444)
+
 	// path to our output file
+	path := m.outputDir + "/" + job.ID() + "/output"
+	output, err := os.OpenFile(path, os.O_RDONLY, 0444)
 	if err != nil {
-		fmt.Printf("unable to open output file: %v\n", err)
+		zap.L().Error("unable to open output file", zap.Error(err))
 		return nil, err
 	}
 

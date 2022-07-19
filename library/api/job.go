@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -9,11 +8,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/seanhagen/workernator/internal/pb"
 )
-
-type jobOutput struct {
-	file *os.File
-	buf  *bytes.Buffer
-}
 
 // job fulfills the library.Job interface ( and so fulfils the
 // library.JobInfo interface as well )
@@ -66,7 +60,6 @@ func (ji *job) Stop() error {
 	err := ji.cmd.Process.Kill()
 	<-ji.done.Done()
 	if err != nil {
-		ji.err = err
 		return err
 	}
 	return nil

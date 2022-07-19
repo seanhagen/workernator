@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/seanhagen/workernator/internal/grpc"
 	pb "github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library/server"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -52,29 +51,24 @@ func main() {
 	// create the server
 	srv, err := grpc.NewServer(config)
 	if err != nil {
-		fmt.Printf("Unable to set up GRPC server: %v\n", err)
-		os.Exit(1)
+		zap.L().Fatal("Unable to set up GRPC server", zap.Error(err))
 	}
 
 	// create the actual service that properly handles requests
 	service, err := server.NewService()
 	if err != nil {
-		fmt.Printf("Unable to create workernator service: %v\n", err)
-		os.Exit(1)
+		zap.L().Fatal("Unable to create workernator service", zap.Error(err))
 	}
 
-	// register our workernator /service/ with our grpc /server/
-	// ...names are hare, okay?
+	// register our workernator /service/ with our grpc /server/; names are hard, okay?
 	srv.RegisterServerHandler(func(s *grpc.GRPCServer) {
 		pb.RegisterServiceServer(s, service)
 	})
 
 	// start!
 	if err := srv.Start(context.Background()); err != nil {
-		fmt.Printf("Unable to start GRPC server: %v\n", err)
-		os.Exit(1)
+		zap.L().Fatal("Unable to start GRPC server", zap.Error(err))
 	}
 
-	// all done, nothing else to do here
-	fmt.Printf("Server shutdown complete!\n")
+	zap.L().Info("Server shutdown complete!")
 }

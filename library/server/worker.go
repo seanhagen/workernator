@@ -21,18 +21,22 @@ var kingLear string
 // manage jobs on behalf of callers.
 type Manager interface {
 	StartJob(ctx context.Context, cmd string, args ...string) (library.Job, error)
-	Status(ctx context.Context, id string)
+	StopJob(ctx context.Context, id string) (library.Job, error)
+	JobStatus(ctx context.Context, id string) (library.Job, error)
+	JobOutput(ctx context.Context, id string) (io.Reader, error)
 }
 
 // Service is the implementation of the Workernator GRPC service
 type Service struct {
 	pb.UnimplementedServiceServer
+
+	manager Manager
 }
 
-func NewService() (*Service, error) {
-	return &Service{}, nil
 // NewService builds a Service, returning an error if there are any issues encountered
 // while setting up the service.
+func NewService(mgr Manager) (*Service, error) {
+	return &Service{manager: mgr}, nil
 }
 
 // Start handles starting a job

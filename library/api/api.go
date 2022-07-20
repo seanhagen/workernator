@@ -129,18 +129,22 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 		}
 
 		statusSet := false
-		if err != nil {
+		// the job failed, but wasn't killed/stopped
+		if err != nil && st != statusKilled {
 			statusSet = true
 			j.Error = err
 			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
 		}
 
-		if err == nil && st != 0 {
+		// the job failed, but didn't return an error ( and wasn't killed )
+		if err == nil && st > 0 {
 			statusSet = true
 			j.Error = fmt.Errorf("exited with status %v", st)
 			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
 		}
 
+		// the job failed, and according to the exit code it was
+		// 'terminated by a signal' -- ie, killed
 		if st == statusKilled && !statusSet {
 			j.Status = library.JobStatus(pb.JobStatus_Stopped.Number())
 		}

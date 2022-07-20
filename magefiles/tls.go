@@ -96,12 +96,18 @@ func generateCertificate(certFor string, isClient bool) error {
 		config,
 	)
 
+	commonName := "server"
+	if certFor != "server" {
+		commonName = "client"
+	}
+	subj := fmt.Sprintf("/O=Teleport/OU=workernator/CN=%v/L=%v", commonName, certFor)
 	keyPath := buildDir + "/ca.key"
 	csrPath := buildDir + "/" + certFor + ".csr"
 	stdOut := bytes.NewBuffer(nil)
 	stdErr := bytes.NewBuffer(nil)
+
 	_, err := sh.Exec(nil, stdOut, stdErr, "openssl", "req", "-new", "-key", keyPath,
-		"-out", csrPath, "-config", config)
+		"-subj", subj, "-out", csrPath, "-config", config)
 	if err != nil {
 		fmt.Fprintf(os.Stdout, " ERROR: %v\n", err)
 		fmt.Fprintf(os.Stdout, stdOut.String())

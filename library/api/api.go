@@ -16,6 +16,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// this is a potential status code returned by
+// (*exec.Cmd).ProcessState.ExitCode(); it's -1 when a job is still
+// running or when it was terminated via a signal
 const statusKilled = -1
 
 // Config is used by NewManager to configure a Manager before returning it

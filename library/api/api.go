@@ -2,18 +2,13 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/rs/xid"
-	"github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library"
-	"go.uber.org/zap"
 )
 
 // Config is used by NewManager to configure a Manager before
@@ -32,7 +27,7 @@ type Config struct {
 //
 // It should be initialized using NewManager(conf Config).
 type Manager struct {
-	jobs    map[xid.ID]*library.Job
+	jobs    map[string]*library.Job
 	jobLock sync.Mutex
 
 	outputDir string
@@ -46,7 +41,7 @@ func NewManager(conf Config) (*Manager, error) {
 	}
 
 	manager := &Manager{
-		jobs:      map[xid.ID]*library.Job{},
+		jobs:      map[string]*library.Job{},
 		outputDir: conf.OutputPath,
 		jobLock:   sync.Mutex{},
 	}
@@ -59,84 +54,16 @@ func NewManager(conf Config) (*Manager, error) {
 // the ability to wait for the job to finish, or to stop the job early
 // by killing it.
 func (m *Manager) StartJob(ctx context.Context, command string, args ...string) (*library.Job, error) {
-	id := xid.New()
-
-	jobOutputDir := m.outputDir + "/" + id.String()
-	if err := os.MkdirAll(jobOutputDir, 0755); err != nil {
-		return nil, fmt.Errorf("unable to create job output directory: %w", err)
-	}
-
-	stdoutFile, err := os.OpenFile(jobOutputDir+"/output", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
+	job, err := library.NewJob(ctx, m.outputDir, command, args...)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create file to capture output: %w", err)
+		return nil, fmt.Errorf("unable to create job: %w", err)
 	}
-
-	stderrFile, err := os.OpenFile(jobOutputDir+"/error", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create file to capture errors: %w", err)
-	}
-	ctx, cancel := context.WithCancel(ctx)
-
-	cmd := exec.Command(command, args...)
-	cmd.Stdout = stdoutFile
-	cmd.Stderr = stderrFile
-
-	startTime := time.Now()
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return nil, err
-	}
-
-	j := &library.Job{
-		JobInfo: library.JobInfo{
-			ID:     id.String(),
-			Status: library.JobStatus(pb.JobStatus_Running.Number()),
-
-			Command:   command,
-			Arguments: args,
-
-			Started: startTime,
-		},
-	}
-
-	j.SetCommand(cmd)
-	j.SetContext(ctx)
 
 	m.jobLock.Lock()
-	m.jobs[id] = j
+	m.jobs[job.ID] = job
 	m.jobLock.Unlock()
-
-	go m.closeOutputsWhenJobDone(cmd, stdoutFile, stderrFile)
-	go m.waitForJobToComplete(cmd, id, cancel)
 
 	return j, nil
-}
-
-// closeOutputsWhenJobDone waits for the job to finish, then closes
-// the STDOUT & STDERR output files
-func (m *Manager) closeOutputsWhenJobDone(cmd *exec.Cmd, stdoutFile, stderrFile *os.File) {
-	_ = cmd.Wait()
-	if err := stdoutFile.Close(); err != nil {
-		zap.L().Error("unable to close output file", zap.Error(err))
-	}
-	if err := stderrFile.Close(); err != nil {
-		zap.L().Error("unable to close error output file", zap.Error(err))
-	}
-}
-
-// waitForJobToComplete ...
-func (m *Manager) waitForJobToComplete(cmd *exec.Cmd, id xid.ID, cancel context.CancelFunc) {
-	err := cmd.Wait()
-	exitCode := cmd.ProcessState.ExitCode()
-
-	m.jobLock.Lock()
-	j := m.jobs[id]
-
-	j.SetFinished(err, exitCode)
-
-	m.jobs[id] = j
-	m.jobLock.Unlock()
-	cancel()
 }
 
 // JobStatus returns the status of a job, whether it's running or
@@ -177,89 +104,20 @@ func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.ReadCloser, e
 		return nil, err
 	}
 
-	// this is the cool bit
-	read, write := io.Pipe()
-
-	// path to our output file
-	path := m.outputDir + "/" + job.ID + "/output"
-	output, err := os.OpenFile(path, os.O_RDONLY, 0444)
-	if err != nil {
-		zap.L().Error("unable to open output file", zap.Error(err))
-		return nil, err
-	}
-
-	// launch a go routine to read from the file and write to the pipe
-	go pipeToOutput(output, job, write)
-
-	// immediately return the pipe reader for the user
-	return read, nil
+	return job.GetOutput()
 }
 
 // validateID validates that the ID given is a valid xid, and the ID
 // of a job started by this manager.
 func (m *Manager) validateID(id string) (*library.Job, error) {
-	jid, err := xid.FromString(id)
-	if err != nil {
+	if _, err := xid.FromString(id); err != nil {
 		return nil, library.NewErrInvalidID(id, err)
 	}
 
-	job, ok := m.jobs[jid]
+	job, ok := m.jobs[id]
 	if !ok {
 		return nil, library.NewErrNoJobForID(id)
 	}
 
 	return job, nil
-}
-
-// pipeToOutput is meant to be launched as a goroutine so that it can
-// read from the provided file and write to the io pipe provided. If
-// the job hasn't finished, it will wait until it has before
-// exiting. This provides the 'tail' functionality.
-func pipeToOutput(file *os.File, cmdJob *library.Job, writeTo *io.PipeWriter) {
-	var lastSize int64
-	buf := make([]byte, 1024)
-
-	for {
-		fi, err := file.Stat()
-		if err != nil {
-			x := fmt.Errorf("unable to stat file: %w", err)
-			_ = writeTo.CloseWithError(x)
-			return
-		}
-
-		if fi.Size() > lastSize {
-			n, err := file.Read(buf)
-
-			// if we read anything, first write it to our pipe
-			if n > 0 {
-				lastSize += int64(n)
-				_, err = writeTo.Write(buf[:n])
-				if err != nil {
-					_ = writeTo.CloseWithError(err)
-					return
-				}
-			}
-
-			if err == nil && cmdJob.Finished() {
-				_ = writeTo.CloseWithError(io.EOF)
-				return
-			}
-
-			// unable to read from the file because we've reached the end?
-			if errors.Is(err, io.EOF) {
-				if cmdJob.Finished() {
-					_ = writeTo.CloseWithError(io.EOF)
-					return
-				}
-				goto wait
-			}
-
-			if err != nil {
-				_ = writeTo.CloseWithError(err)
-			}
-		}
-
-	wait:
-		time.Sleep(time.Millisecond * 200)
-	}
 }

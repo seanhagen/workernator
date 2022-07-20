@@ -58,6 +58,7 @@ func NewServer(conf Config) (*Server, error) {
 
 	l, err := net.Listen("tcp", ":"+conf.Port)
 	if err != nil {
+		_ = l.Close()
 		return nil, fmt.Errorf("can't listen on port %v, encountered error: %w", conf.Port, err)
 	}
 
@@ -69,21 +70,25 @@ func NewServer(conf Config) (*Server, error) {
 	}
 
 	if err := setupLogging(&conf); err != nil {
+		_ = l.Close()
 		return nil, fmt.Errorf("unable to setup logging: %w", err)
 	}
 
 	mtlsConfig, err := setupCerts(conf)
 	if err != nil {
+		_ = l.Close()
 		return nil, fmt.Errorf("unable to setup mTLS configuration: %w", err)
 	}
 
 	unaryInterceptors, err := setupUnaryMiddleware(conf, auth)
 	if err != nil {
+		_ = l.Close()
 		return nil, fmt.Errorf("unable to setup unary interceptors: %w", err)
 	}
 
 	streamInterceptors, err := setupStreamMiddleware(conf, auth)
 	if err != nil {
+		_ = l.Close()
 		return nil, fmt.Errorf("unable to setup stream interceptors: %w", err)
 	}
 

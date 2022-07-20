@@ -123,17 +123,20 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 			zap.L().Error("unable to close error output file", zap.Error(err))
 		}
 
+		statusSet := false
 		if err != nil {
+			statusSet = true
 			j.Error = err
 			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
 		}
 
 		if err == nil && st != 0 {
+			statusSet = true
 			j.Error = fmt.Errorf("exited with status %v", st)
 			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
 		}
 
-		if st == statusKilled {
+		if st == statusKilled && !statusSet {
 			j.Status = library.JobStatus(pb.JobStatus_Stopped.Number())
 		}
 

@@ -14,7 +14,6 @@ import (
 	pb "github.com/seanhagen/workernator/internal/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -60,7 +59,7 @@ func TestInternal_NewServer(t *testing.T) {
 		},
 	}
 
-	server.RegisterServerHandler(func(s *grpc.Server) {
+	server.RegisterServerHandler(func(s *GRPCServer) {
 		pb.RegisterServiceServer(s, skel)
 	})
 
@@ -78,10 +77,10 @@ func TestInternal_NewServer(t *testing.T) {
 	tlsDialOpt, err := setupClientCerts(t, "./testdata/client.pem", "./testdata/cakey.key", "./testdata/ca.pem")
 	require.NoError(t, err)
 
-	conn, err := grpc.DialContext(
+	conn, err := DialContext(
 		ctx,
 		"localhost",
-		grpc.WithContextDialer(
+		WithContextDialer(
 			func(ctx context.Context, _ string) (net.Conn, error) {
 				return listener.DialContext(ctx)
 			},
@@ -110,14 +109,14 @@ func TestInternal_NewServer(t *testing.T) {
 	assert.JSONEq(t, string(expectJSON), string(gotJSON))
 }
 
-func setupClientCerts(t *testing.T, certPath, keyPath, chainPath string) (grpc.DialOption, error) {
+func setupClientCerts(t *testing.T, certPath, keyPath, chainPath string) (DialOption, error) {
 	t.Helper()
 	cert, certPool, err := setupTestCerts(t, certPath, keyPath, chainPath)
 	if err != nil {
 		return nil, err
 	}
 
-	tlsDialOpt := grpc.WithTransportCredentials(
+	tlsDialOpt := WithTransportCredentials(
 		credentials.NewTLS(
 			&tls.Config{
 				ClientAuth:   tls.RequireAndVerifyClientCert,

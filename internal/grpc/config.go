@@ -8,8 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"google.golang.org/grpc"
 )
 
 // Permission defines a type used to handle permission levels
@@ -51,8 +49,8 @@ type Config struct {
 	// Interceptors is optional, but any interceptors in here will be
 	// added to the list of interceptors during server startup
 	Interceptors struct {
-		Unary  []grpc.UnaryServerInterceptor
-		Stream []grpc.StreamServerInterceptor
+		Unary  []UnaryServerInterceptor
+		Stream []StreamServerInterceptor
 	}
 
 	// ACL is the set of user permissions the server will use

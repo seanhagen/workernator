@@ -21,9 +21,11 @@ import (
 // running or when it was terminated via a signal
 const statusKilled = -1
 
-// Config is used by NewManager to configure a Manager before returning it
+// Config is used by NewManager to configure a Manager before
+// returning it
 type Config struct {
-	// OutputPath is where the manager will store the final output of a job
+	// OutputPath is where the manager will store the final output of a
+	// job
 	OutputPath string
 }
 

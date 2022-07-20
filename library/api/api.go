@@ -16,11 +16,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// this is a potential status code returned by
-// (*exec.Cmd).ProcessState.ExitCode(); it's -1 when a job is still
-// running or when it was terminated via a signal
-const statusKilled = -1
-
 // Config is used by NewManager to configure a Manager before
 // returning it
 type Config struct {
@@ -111,50 +106,37 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	m.jobs[id] = j
 	m.jobLock.Unlock()
 
-	go func() {
-		err := cmd.Wait()
-		st := cmd.ProcessState.ExitCode()
-		j.Ended = time.Now()
-
-		m.jobLock.Lock()
-		j := m.jobs[id]
-
-		j.Status = library.JobStatus(pb.JobStatus_Finished.Number())
-
-		if x := stdoutFile.Close(); x != nil {
-			zap.L().Error("unable to close output file", zap.Error(err))
-		}
-		if x := stderrFile.Close(); x != nil {
-			zap.L().Error("unable to close error output file", zap.Error(err))
-		}
-
-		statusSet := false
-		// the job failed, but wasn't killed/stopped
-		if err != nil && st != statusKilled {
-			statusSet = true
-			j.Error = err
-			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
-		}
-
-		// the job failed, but didn't return an error ( and wasn't killed )
-		if err == nil && st > 0 {
-			statusSet = true
-			j.Error = fmt.Errorf("exited with status %v", st)
-			j.Status = library.JobStatus(pb.JobStatus_Failed.Number())
-		}
-
-		// the job failed, and according to the exit code it was
-		// 'terminated by a signal' -- ie, killed
-		if st == statusKilled && !statusSet {
-			j.Status = library.JobStatus(pb.JobStatus_Stopped.Number())
-		}
-
-		m.jobs[id] = j
-		m.jobLock.Unlock()
-		cancel()
-	}()
+	go m.closeOutputsWhenJobDone(cmd, stdoutFile, stderrFile)
+	go m.waitForJobToComplete(cmd, id, cancel)
 
 	return j, nil
+}
+
+// closeOutputsWhenJobDone waits for the job to finish, then closes
+// the STDOUT & STDERR output files
+func (m *Manager) closeOutputsWhenJobDone(cmd *exec.Cmd, stdoutFile, stderrFile *os.File) {
+	_ = cmd.Wait()
+	if err := stdoutFile.Close(); err != nil {
+		zap.L().Error("unable to close output file", zap.Error(err))
+	}
+	if err := stderrFile.Close(); err != nil {
+		zap.L().Error("unable to close error output file", zap.Error(err))
+	}
+}
+
+// waitForJobToComplete ...
+func (m *Manager) waitForJobToComplete(cmd *exec.Cmd, id xid.ID, cancel context.CancelFunc) {
+	err := cmd.Wait()
+	exitCode := cmd.ProcessState.ExitCode()
+
+	m.jobLock.Lock()
+	j := m.jobs[id]
+
+	j.SetFinished(err, exitCode)
+
+	m.jobs[id] = j
+	m.jobLock.Unlock()
+	cancel()
 }
 
 // JobStatus returns the status of a job, whether it's running or
@@ -189,7 +171,7 @@ func (m *Manager) StopJob(ctx context.Context, id string) (*library.JobInfo, err
 // GetJobOutput returns an io.Reader that can be read to get the
 // output of a job. If the ID provided is either not a valid xid or
 // not the ID of a job an error will be returned.
-func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.Reader, error) {
+func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.ReadCloser, error) {
 	job, err := m.validateID(id)
 	if err != nil {
 		return nil, err

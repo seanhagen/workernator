@@ -4,7 +4,19 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sync"
 	"time"
+)
+
+const (
+	// this is a potential status code returned by
+	// (*exec.Cmd).ProcessState.ExitCode(); it's -1 when a job is still
+	// running or when it was terminated via a signal
+	statusKilled = -1
+
+	// this is the status code returned in UNIX when a program exits
+	// successfully
+	statusOK = 0
 )
 
 // JobStatus is used to define the potential statuses for a job
@@ -62,18 +74,54 @@ type Job struct {
 
 	cmd  *exec.Cmd
 	done context.Context
+	lock sync.RWMutex
 }
 
 // SetCommand is used by the manager to set the *exec.Cmd run by this
 // job.
 func (j *Job) SetCommand(cmd *exec.Cmd) {
+	j.lock.Lock()
 	j.cmd = cmd
+	j.lock.Unlock()
 }
 
 // SetContext is used by the manager to set the context.Context used
 // when waiting for a job to complete.
 func (j *Job) SetContext(ctx context.Context) {
+	j.lock.Lock()
 	j.done = ctx
+	j.lock.Unlock()
+}
+
+// SetFinished ...
+func (j *Job) SetFinished(cmdErr error, exitCode int) {
+	j.lock.Lock()
+	defer j.lock.Unlock()
+	j.Ended = time.Now()
+
+	// if the job was killed, the exitCode will equal statusKilled (-1)
+	if exitCode == statusKilled {
+		j.Error = cmdErr
+		j.Status = Stopped
+		return
+	}
+
+	// job wasn't killed, but failed for some reason
+	if cmdErr != nil {
+		j.Error = cmdErr
+		j.Status = Failed
+		return
+	}
+
+	// no error, but not 'ok' exit code
+	if cmdErr == nil && exitCode != statusOK {
+		j.Error = fmt.Errorf("exited with status %v", exitCode)
+		j.Status = Failed
+		return
+	}
+
+	// if we got here, the job should have exited successfully
+	j.Status = Finished
 }
 
 // Stop forceably stops the job ( by killing it ), returning the error
@@ -100,7 +148,11 @@ func (j *Job) Info() JobInfo {
 
 // Finished ...
 func (j *Job) Finished() bool {
-	return !j.Ended.IsZero()
+	var ended time.Time
+	j.lock.RLock()
+	ended = j.Ended
+	j.lock.RUnlock()
+	return !ended.IsZero()
 }
 
 // JobInfo contains information about a job, whether it's running or

@@ -28,7 +28,7 @@ type testManager struct {
 	startFn  func(ctx context.Context, cmd string, args ...string) (*library.Job, error)
 	stopFn   func(ctx context.Context, id string) (*library.JobInfo, error)
 	statusFn func(ctx context.Context, id string) (*library.JobInfo, error)
-	outputFn func(ctx context.Context, id string) (io.Reader, error)
+	outputFn func(ctx context.Context, id string) (io.ReadCloser, error)
 }
 
 var _ Manager = testManager{}
@@ -47,6 +47,6 @@ func (tm testManager) JobStatus(ctx context.Context, id string) (*library.JobInf
 	return tm.statusFn(ctx, id)
 }
 
-func (tm testManager) GetJobOutput(ctx context.Context, id string) (io.Reader, error) {
+func (tm testManager) GetJobOutput(ctx context.Context, id string) (io.ReadCloser, error) {
 	return tm.outputFn(ctx, id)
 }

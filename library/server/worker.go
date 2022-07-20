@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/seanhagen/workernator/internal/grpc"
 	pb "github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -22,7 +24,7 @@ type Manager interface {
 	StartJob(context.Context, string, ...string) (*library.Job, error)
 	StopJob(context.Context, string) (*library.JobInfo, error)
 	JobStatus(context.Context, string) (*library.JobInfo, error)
-	GetJobOutput(context.Context, string) (io.Reader, error)
+	GetJobOutput(context.Context, string) (io.ReadCloser, error)
 }
 
 // Service is the implementation of the Workernator GRPC service
@@ -182,24 +184,30 @@ func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer)
 
 	output, err := s.manager.GetJobOutput(strm.Context(), id.String())
 	if err != nil {
-		// also set the response code to codes.Internal
-		return err
+		return status.Error(codes.Internal, fmt.Sprintf("unable to get job output: %v", err))
 	}
+
+	go func() {
+		<-strm.Context().Done()
+		if err := output.Close(); err != nil {
+			zap.L().Error("unable to close job output reader", zap.Error(err))
+		}
+	}()
 
 	var buf = make([]byte, 1024)
 
 	for {
 		n, err := output.Read(buf)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("unable to read from buffer: %w", err)
+			return status.Error(codes.Internal, fmt.Sprintf("unable to read from buffer: %v", err))
 		}
 
 		toSend := &pb.OutputJobResponse{Data: buf[:n]}
 		if err := strm.Send(toSend); err != nil {
-			return fmt.Errorf("unable to send to stream: %w", err)
+			return status.Error(codes.Internal, fmt.Sprintf("unable to send to stream: %s", err))
 		}
 	}
 

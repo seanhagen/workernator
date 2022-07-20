@@ -2,91 +2,126 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/seanhagen/workernator/internal/grpc"
-	pb "github.com/seanhagen/workernator/internal/pb"
+	"github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library/api"
 	"github.com/seanhagen/workernator/library/server"
+	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
 
 func main() {
-	// parse flags
-	port := "8080"
-	certPath := "./server.pem"
-	keyPath := "./ca.key"
-	chainPath := "./ca.pem"
+	cobra.CheckErr(rootCmd.Execute())
+}
 
-	outputPath, err := os.MkdirTemp("/tmp", "workernator")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to create temporary directory for job output: %v", err)
-		os.Exit(1)
-	}
+var rootCmd = &cobra.Command{
+	Use:   api.WorkernatorServerCmdName,
+	Short: "The GRPC server for workernator",
+}
 
-	// setup config
-	config := grpc.Config{
-		Port: port,
+func init() {
+	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(api.RunInNamespaceCmd())
+	rootCmd.AddCommand(api.LaunchJobCmd())
 
-		CertPath:  certPath,
-		KeyPath:   keyPath,
-		ChainPath: chainPath,
+	serveCmd.Flags().StringVarP(&port, "port", "p", "", "what port the server should listen on")
+	serveCmd.Flags().StringVarP(
+		&certPath, "certs", "c", "",
+		"path to a valid TLS certificate that the server will use to identify itself to clients")
+	serveCmd.Flags().StringVarP(&keyPath, "key", "k", "", "path to a valid key file")
+	serveCmd.Flags().StringVarP(&chainPath, "chain", "a", "", "path to a valid CA certificate")
+	serveCmd.Flags().StringVarP(&outputPath, "output", "o", "", "path to a folder the server can write to")
+}
 
-		// acl!
-		ACL: grpc.UserPermissions{
-			"admin": grpc.RPCPermissions{
-				"start":  grpc.Super,
-				"stop":   grpc.Super,
-				"status": grpc.Super,
-				"output": grpc.Super,
-			},
-			"alice": grpc.RPCPermissions{
-				"start":  grpc.Own,
-				"stop":   grpc.Own,
-				"status": grpc.Own,
-				"output": grpc.Own,
-			},
-			"bob": grpc.RPCPermissions{
-				"start":  grpc.Own,
-				"status": grpc.Own,
-			},
-			"charlie": grpc.RPCPermissions{
-				"output": grpc.Super,
-			},
-		},
-	}
+var (
+	port       string
+	certPath   string
+	keyPath    string
+	chainPath  string
+	outputPath string
+)
 
-	// create the server
-	srv, err := grpc.NewServer(config)
-	if err != nil {
-		zap.L().Fatal("Unable to set up GRPC server", zap.Error(err))
-	}
+var defaultACL = grpc.UserPermissions{
+	"admin": grpc.RPCPermissions{
+		"start":  grpc.Super,
+		"stop":   grpc.Super,
+		"status": grpc.Super,
+		"output": grpc.Super,
+	},
+	"alice": grpc.RPCPermissions{
+		"start":  grpc.Own,
+		"stop":   grpc.Own,
+		"status": grpc.Own,
+		"output": grpc.Own,
+	},
+	"bob": grpc.RPCPermissions{
+		"start":  grpc.Own,
+		"status": grpc.Own,
+	},
+	"charlie": grpc.RPCPermissions{
+		"output": grpc.Super,
+	},
+}
 
-	managerConfig := api.Config{
-		OutputPath: outputPath,
-	}
+var serverConfig grpc.Config
+var managerConfig api.Config
 
-	manager, err := api.NewManager(managerConfig)
-	if err != nil {
-		zap.L().Fatal("Unable to set up job manager", zap.Error(err))
-	}
+var serveCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Starts the GRPC server",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// setup config
+		serverConfig = grpc.Config{
+			Port: port,
 
-	// create the actual service that properly handles requests
-	service, err := server.NewService(manager)
-	if err != nil {
-		zap.L().Fatal("Unable to create workernator service", zap.Error(err))
-	}
+			CertPath:  certPath,
+			KeyPath:   keyPath,
+			ChainPath: chainPath,
 
-	// register our workernator /service/ with our grpc /server/; names are hard, okay?
-	srv.RegisterServerHandler(func(s *grpc.GRPCServer) {
-		pb.RegisterServiceServer(s, service)
-	})
+			// acl!
+			ACL: defaultACL,
+		}
+		if err := serverConfig.Valid(); err != nil {
+			return err
+		}
 
-	// start!
-	if err := srv.Start(context.Background()); err != nil {
-		zap.L().Fatal("Unable to start GRPC server", zap.Error(err))
-	}
+		managerConfig = api.Config{
+			OutputPath: outputPath,
+		}
 
-	zap.L().Info("Server shutdown complete!")
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		manager, err := api.NewManager(managerConfig)
+		if err != nil {
+			zap.L().Fatal("Unable to set up job manager", zap.Error(err))
+		}
+
+		// create the server
+		srv, err := grpc.NewServer(serverConfig)
+		if err != nil {
+			zap.L().Fatal("Unable to set up GRPC server", zap.Error(err))
+		}
+
+		// create the actual service that properly handles requests
+		service, err := server.NewService(manager)
+		if err != nil {
+			zap.L().Fatal("Unable to create workernator service", zap.Error(err))
+		}
+
+		// register our workernator /service/ with our grpc /server/; names are hard, okay?
+		srv.RegisterServerHandler(func(s *grpc.GRPCServer) {
+			pb.RegisterServiceServer(s, service)
+		})
+
+		// start!
+		if err := srv.Start(context.Background()); err != nil {
+			zap.L().Fatal("Unable to start GRPC server", zap.Error(err))
+		}
+
+		zap.L().Info("Server shutdown complete!")
+
+		return nil
+	},
 }

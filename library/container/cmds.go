@@ -80,9 +80,13 @@ func RunContainer() *cobra.Command {
 			cont.SetStdErr(cmd.ErrOrStderr())
 			cont.SetStdOut(cmd.OutOrStdout())
 
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "about to run container...\n")
 			err = cont.Run(cmd.Context())
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "container done running!\n")
+
 			if err != nil {
-				return fmt.Errorf("container failed to run: %w", err)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "container failed to run: %v\n", err)
+				//return fmt.Errorf("container failed to run: %w", err)
 			}
 
 			exitCode, err := cont.Wait(cmd.Context())
@@ -236,6 +240,8 @@ func RunInNamespaceCmd() *cobra.Command {
 				}
 			}
 
+			wrangler.debugLog("this is the command running now: \n\n--------------------------------------------------")
+
 			runCmd := exec.Command(commandToRun, commandArgs...)
 			runCmd.Stdout = cmd.OutOrStdout()
 			runCmd.Stderr = cmd.ErrOrStderr()
@@ -243,6 +249,8 @@ func RunInNamespaceCmd() *cobra.Command {
 				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			}
 			runErr := runCmd.Run()
+
+			wrangler.debugLog("\n--------------------------------------------------\n\ncontainer done running\n")
 
 			if err := wrangler.umountContainerDirectories(containerID); err != nil {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "unable to unmount container directories: %v\n", err)

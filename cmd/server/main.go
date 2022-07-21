@@ -6,6 +6,7 @@ import (
 	"github.com/seanhagen/workernator/internal/grpc"
 	"github.com/seanhagen/workernator/internal/pb"
 	"github.com/seanhagen/workernator/library/api"
+	"github.com/seanhagen/workernator/library/container"
 	"github.com/seanhagen/workernator/library/server"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -97,6 +98,17 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			zap.L().Fatal("Unable to set up job manager", zap.Error(err))
 		}
+
+		wranglerConf := container.Config{
+			LibPath: "",
+			RunPath: "",
+			TmpPath: "/tmp",
+		}
+		wrangler, err := container.NewWrangler(wranglerConf)
+		if err != nil {
+			zap.L().Fatal("unable to setup container wrangler", zap.Error(err))
+		}
+		wrangler.SetRootCommandName(api.WorkernatorServerCmdName)
 
 		// create the server
 		srv, err := grpc.NewServer(serverConfig)

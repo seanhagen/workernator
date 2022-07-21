@@ -18,7 +18,6 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(container.RunContainer())
 	rootCmd.AddCommand(container.RunInNamespaceCmd())
-	rootCmd.AddCommand(container.LaunchJobCmd())
 	rootCmd.AddCommand(container.SetupNetNS())
 	rootCmd.AddCommand(container.SetupVeth())
 }

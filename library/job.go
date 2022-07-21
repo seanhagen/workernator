@@ -54,8 +54,8 @@ type ContainerToRun interface {
 	Command() string
 	Args() []string
 
-	Run() error
-	Wait() (int, error)
+	Run(context.Context) error
+	Wait(context.Context) (int, error)
 	Kill() error
 }
 
@@ -93,7 +93,7 @@ func NewJob(ctx context.Context, outputDir string, container ContainerToRun) (*J
 	container.SetStdOut(stdoutFile)
 	container.SetStdErr(stdoutFile)
 
-	if err := container.Run(); err != nil {
+	if err := container.Run(ctx); err != nil {
 		cancel()
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func NewJob(ctx context.Context, outputDir string, container ContainerToRun) (*J
 	}
 
 	go job.closeOutputsWhenJobDone()
-	go job.waitForFinish()
+	go job.waitForFinish(ctx)
 
 	return job, nil
 }
@@ -245,9 +245,9 @@ func (j *Job) closeOutputsWhenJobDone() {
 }
 
 // waitForFinish ...
-func (j *Job) waitForFinish() {
+func (j *Job) waitForFinish(ctx context.Context) {
 	defer j.cancel()
-	exitCode, cmdErr := j.container.Wait()
+	exitCode, cmdErr := j.container.Wait(ctx)
 
 	j.lock.Lock()
 	defer j.lock.Unlock()

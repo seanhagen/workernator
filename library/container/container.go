@@ -1,31 +1,42 @@
 package container
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 
 	"github.com/rs/xid"
 	"golang.org/x/sys/unix"
 )
 
-const (
-	envJobID = "ENV_WORKERNATOR_CONTAINER_ID"
-)
+// const (
+// 	envJobID = "ENV_WORKERNATOR_CONTAINER_ID"
+// )
 
 // Container ...
 type Container struct {
 	id  xid.ID
 	img *Image
 
-	cmd *exec.Cmd
+	cmd    *exec.Cmd
+	done   context.Context
+	cancel context.CancelFunc
 
-	baseCommand  string
-	commandToRun string
-	commandArgs  []string
-	stdout       io.Writer
-	stderr       io.Writer
+	lock      sync.Mutex
+	exitCode  int
+	exitError error
+
+	baseCommand       string
+	commandToRun      string
+	commandArgs       []string
+	stdout            io.Writer
+	stderr            io.Writer
+	pathToContainerFs string
+	pathToRunDir      string
 }
 
 // ID ...
@@ -64,7 +75,9 @@ func (c *Container) SetStdErr(err io.Writer) {
 }
 
 // Run  ...
-func (c *Container) Run() error {
+func (c *Container) Run(ctx context.Context) error {
+	c.done, c.cancel = context.WithCancel(ctx)
+
 	stdout := io.Discard
 	stderr := io.Discard
 
@@ -82,12 +95,9 @@ func (c *Container) Run() error {
 			// startingInNamespace is the argument we give so that when this binary starts up
 			//    it knows that it's suppposed to be running the specific subcommand
 			//    that handles the fork/clone
-			[]string{"/proc/self/exe", startingInNamespace}, // c.baseCommand,startingInNamespace},
+			[]string{"/proc/self/exe", startingInNamespace, c.id.String()}, // c.baseCommand,startingInNamespace},
 			c.commandArgs...,
 		),
-		Env: []string{
-			fmt.Sprintf("%v=%v", envJobID, c.id.String()),
-		},
 		Stdout: stdout,
 		Stderr: stderr,
 
@@ -96,78 +106,90 @@ func (c *Container) Run() error {
 			Cloneflags: syscall.CLONE_NEWUSER |
 				syscall.CLONE_NEWUTS |
 				syscall.CLONE_NEWNS |
-				syscall.CLONE_NEWPID,
+				syscall.CLONE_NEWPID |
+				unix.CLONE_NEWNET,
+
+			// Unshareflags: syscall.CLONE_NEWNS,
+			Unshareflags: syscall.CLONE_NEWNS |
+				unix.CLONE_NEWCGROUP |
+				unix.CLONE_NEWUTS |
+				unix.CLONE_NEWNET,
+
+			// UidMappings: []syscall.SysProcIDMap{
+			// 	{ContainerID: 0, HostID: 1000, Size: 1},
+			// },
 			UidMappings: []syscall.SysProcIDMap{
-				{
-					ContainerID: 0,
-					HostID:      1000,
-					Size:        1,
-				},
+				{ContainerID: 0, HostID: os.Getuid(), Size: 1},
+			},
+
+			GidMappings: []syscall.SysProcIDMap{
+				{ContainerID: 0, HostID: os.Getgid(), Size: 1},
 			},
 		},
 	}
 	c.cmd = cmd
 
-	return cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// waits for the command to finish, then umounts the fs & net ns,
+	// then removes container from cgroups, then removes the container directory
+	go c.cleanupWhenDone()
+
+	return nil
+}
+
+// cleanupWhenDone ...
+func (c *Container) cleanupWhenDone() {
+	c.exitError = c.cmd.Wait()
+	c.exitCode = c.cmd.ProcessState.ExitCode()
+	c.cancel()
+
+	_, _ = fmt.Fprintf(os.Stdout, "umounting network namespace\n")
+	if err := unmountNetworkNamespace(c.id.String(), c.pathToRunDir); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to unmount network namespace: %v\n", err)
+	}
+
+	_, _ = fmt.Fprintf(os.Stdout, "umounting container fs\n")
+	if err := unmountContainerFS(c.id.String(), c.pathToRunDir); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to umount container filesystem: %v\n", err)
+	}
+
+	_, _ = fmt.Fprintf(os.Stdout, "removing container from cgroups\n")
+	if err := removeContainerCGroups(c.id.String()); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container cgroups: %v\n", err)
+	}
+
+	_, _ = fmt.Fprintf(os.Stdout, "removing container fs directory\n")
+	if err := os.RemoveAll(c.pathToContainerFs); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container dir '%v': %v", c.pathToContainerFs, err)
+	}
 }
 
 // Wait  ...
-func (c *Container) Wait() (int, error) {
+func (c *Container) Wait(ctx context.Context) (int, error) {
 	if c.cmd == nil {
 		return 0, fmt.Errorf("container hasn't started yet")
 	}
 
-	err := c.cmd.Wait()
-	exitCode := c.cmd.ProcessState.ExitCode()
+	select {
+	case <-c.done.Done():
+		// job completed, container signaled itself it's done
+	case <-ctx.Done():
+		// context cancled, don't wait any more
+		return -1, ctx.Err()
+	}
 
-	return exitCode, err
+	<-c.done.Done()
+	c.lock.Lock()
+	err, exit := c.exitError, c.exitCode
+	c.lock.Unlock()
+
+	return exit, err
 }
 
 // Kill  ...
 func (c *Container) Kill() error {
 	return c.cmd.Process.Signal(unix.SIGTERM)
 }
-
-// LaunchContainer ...
-//func (wr *Wrangler) LaunchContainer(container *Container) error {
-/*
-			var opts []string
-			if mem > 0 {
-				opts = append(opts, "--mem="+strconv.Itoa(mem))
-			}
-			if swap >= 0 {
-				opts = append(opts, "--swap="+strconv.Itoa(swap))
-			}
-			if pids > 0 {
-				opts = append(opts, "--pids="+strconv.Itoa(pids))
-			}
-			if cpus > 0 {
-				opts = append(opts, "--cpus="+strconv.Itoa(cpus))
-			}
-			opts = append(opts, "--img="+imageShaHex)
-			args := append([]string{containerID}, cmdArgs...)
-			args = append(opts, args...)
-			args = append([]string{"child-mode"}, args...)
-			cmd = exec.Command("/proc/self/exe", args...)
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.SysProcAttr = &unix.SysProcAttr{
-				Cloneflags: unix.CLONE_NEWPID |
-	      unix.CLONE_NEWUSER |
-					unix.CLONE_NEWNS |
-					unix.CLONE_NEWUTS |
-					unix.CLONE_NEWIPC,
-			}
-			fmt.Printf("launching command %v for really reals\n", args)
-			doOrDie(cmd.Run())
-*/
-
-// unmount network namespace
-
-// umount container fs
-
-// remove cgroups
-
-// remove container folder
-//}

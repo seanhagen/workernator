@@ -1,17 +1,133 @@
 package container
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"io"
+	"os"
+	"strings"
 
-const (
-	setupNetNS string = "__SETUP_NET_NS__"
-	setupVeth  string = "__SETUP_VETH__"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-// AddRequiredSubcommands ...
+const (
+	startingInNamespace string = "__WORKERNATOR__NAMESPACED__"
+	finalRun            string = "__WORKERNATOR__FINAL__"
+	setupNetNS          string = "__SETUP_NET_NS__"
+	setupVeth           string = "__SETUP_VETH__"
+)
+
+// SetRootCommandName ...
 func (wr *Wrangler) SetRootCommandName(cmdName string) {
 	wr.commandRoot = cmdName
 }
 
+// RunContainer ...
+func RunContainer() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run [librarypath] [runpath] [image] [command] [args...]",
+		Short: "for testing running containers",
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+
+		RunE: func(cmd *cobra.Command, args []string) error {
+			spew.Dump(args)
+
+			conf := Config{
+				LibPath: args[0],
+				RunPath: args[1],
+				TmpPath: "/tmp",
+			}
+
+			_, _ = fmt.Fprint(cmd.OutOrStdout(), "getting container wrangler\n")
+			wrangler, err := NewWrangler(conf)
+			if err != nil {
+				return fmt.Errorf("couldn't create wrangler: %w", err)
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "getting image '%v'\n", args[2])
+			img, err := wrangler.GetImage(cmd.Context(), args[2])
+			if err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "prepparing image for launch\n")
+			cont, err := wrangler.PrepImageForLaunch(img)
+			if err != nil {
+				return fmt.Errorf("couldn't prepare container from image: %w", err)
+			}
+
+			_, _ = fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"container ready, about to run '%v %v' in the container!\n",
+				args[3], strings.Join(args[4:], " "))
+			cont.SetCommand(startingInNamespace)
+			cont.SetArgs(args[3:])
+			cont.SetStdErr(cmd.ErrOrStderr())
+			cont.SetStdOut(cmd.OutOrStdout())
+
+			if err := cont.Run(); err != nil {
+				return fmt.Errorf("container failed to run: %w", err)
+			}
+
+			return nil
+		},
+	}
+	return cmd
+}
+
+// RunInNamespaceCmd generates the cobra command the server uses when
+// launching a job in a container. This should be called in init() in
+// the main package, and the returned command should be added to the
+// root command
+func RunInNamespaceCmd() *cobra.Command {
+	var flagTest string
+
+	cmd := &cobra.Command{
+		Use:    startingInNamespace,
+		Short:  "special command, do not use",
+		Hidden: true,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			setupLogger(cmd.OutOrStderr())
+
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			spew.Dump(args, flagTest, os.Environ())
+			fmt.Fprintf(os.Stdout, "this is where the command gets all set up so it's ready to run\n")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&flagTest, "flag", "f", "", "just testing")
+
+	return cmd
+}
+
+// LaunchJobCmd handles the the last bits of setup before running the actual
+// 'job' command the user has requested.
+func LaunchJobCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    finalRun,
+		Short:  "special command, do not use",
+		Hidden: true,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			setupLogger(cmd.OutOrStderr())
+
+			spew.Dump(args)
+			fmt.Fprintf(os.Stdout, "this is where some final setup happens, and then the /actual/ job command gets run\n")
+			return nil
+		},
+	}
+}
+
+// SetupNetNS ...
 func SetupNetNS() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    setupNetNS,
@@ -21,6 +137,7 @@ func SetupNetNS() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			setupLogger(cmd.OutOrStderr())
 			// _ = createDirsIfDontExist([]string{getNetNsPath()})
 			// nsMount := getNetNsPath() + "/" + containerID
 			// if _, err := unix.Open(nsMount, unix.O_RDONLY|unix.O_CREAT|unix.O_EXCL, 0644); err != nil {
@@ -50,6 +167,7 @@ func SetupNetNS() *cobra.Command {
 	return cmd
 }
 
+// SetupVeth ...
 func SetupVeth() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    setupVeth,
@@ -59,6 +177,7 @@ func SetupVeth() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			setupLogger(cmd.OutOrStderr())
 			// nsMount := getNetNsPath() + "/" + containerID
 			// fmt.Printf("opening net ns path: %v\n", nsMount)
 
@@ -137,4 +256,49 @@ func SetupVeth() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func setupLogger(output io.Writer) {
+	encConf := zapcore.EncoderConfig{
+		MessageKey:     "msg",
+		LevelKey:       "level",
+		TimeKey:        "time",
+		NameKey:        "logger",
+		CallerKey:      "file",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,
+		EncodeTime:     zapcore.RFC3339TimeEncoder,
+		EncodeDuration: zapcore.SecondsDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+		EncodeName:     zapcore.FullNameEncoder,
+	}
+
+	lvl := zap.NewAtomicLevel()
+	lvl.SetLevel(zap.WarnLevel)
+
+	isDev := strings.TrimSpace(os.Getenv("DEV_MODE"))
+	if isDev != "" {
+		lvl.SetLevel(zap.DebugLevel)
+	}
+
+	zc := zap.Config{
+		Level:             lvl,
+		DisableCaller:     false,
+		DisableStacktrace: false,
+		Encoding:          "console",
+		EncoderConfig:     encConf,
+		OutputPaths:       []string{"stdout"},
+		ErrorOutputPaths:  []string{"stderr"},
+	}
+
+	opts := []zap.Option{
+		//zap.AddCallerSkip(1),
+	}
+
+	log, err := zc.Build(opts...)
+	if err != nil {
+		_, _ = fmt.Fprintf(output, "unable to set up logging: %v", err)
+	}
+	zap.ReplaceGlobals(log)
 }

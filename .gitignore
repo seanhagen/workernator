@@ -12,3 +12,4 @@ testdata/busyboxfs
 /server/server
 /server/server.pem
 /build/
+/tmp/

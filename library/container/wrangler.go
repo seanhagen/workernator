@@ -26,12 +26,6 @@ const (
 	packageFileName string = "package.tar"
 )
 
-// Container ...
-type Container struct {
-	ID  xid.ID
-	img *Image
-}
-
 // Image ...
 type Image struct {
 	SHA string
@@ -73,6 +67,8 @@ type Config struct {
 
 // Wrangler ...
 type Wrangler struct {
+	debug bool
+
 	lib string
 	run string
 	tmp string
@@ -112,13 +108,16 @@ func NewWrangler(conf Config) (*Wrangler, error) {
 		return nil, fmt.Errorf("unable to create temporary directory: %w", err)
 	}
 
+	isDev := strings.TrimSpace(os.Getenv("DEV_MODE"))
+
 	wr := &Wrangler{
-		lib: conf.LibPath,
-		run: conf.RunPath,
-		tmp: tmp,
+		debug: isDev != "",
+		lib:   conf.LibPath,
+		run:   conf.RunPath,
+		tmp:   tmp,
 	}
 
-	if err := wr.loadOrCreateManifest(); err != nil {
+	if err := wr.loadOrCreateKnownImageDB(); err != nil {
 		return nil, err
 	}
 
@@ -165,8 +164,9 @@ func (wr *Wrangler) GetImage(ctx context.Context, source string) (*Image, error)
 // PrepImageForLaunch ...
 func (wr *Wrangler) PrepImageForLaunch(img *Image) (*Container, error) {
 	c := &Container{
-		ID:  xid.New(),
-		img: img,
+		id:          xid.New(),
+		img:         img,
+		baseCommand: wr.commandRoot,
 	}
 
 	// create container directories
@@ -180,9 +180,9 @@ func (wr *Wrangler) PrepImageForLaunch(img *Image) (*Container, error) {
 	}
 
 	// setup virtual eth on host
-	if err := wr.setupVirtualEthOnHost(c); err != nil {
-		return nil, err
-	}
+	// if err := wr.setupVirtualEthOnHost(c); err != nil {
+	// 	return nil, err
+	// }
 
 	// do the prepare part from 'prepareAndExecuteContainer' now
 	if err := wr.finalizePreparation(c); err != nil {
@@ -192,76 +192,34 @@ func (wr *Wrangler) PrepImageForLaunch(img *Image) (*Container, error) {
 	return c, nil
 }
 
-// LaunchContainer ...
-func (wr *Wrangler) LaunchContainer(container *Container) error {
-	/*
-				var opts []string
-				if mem > 0 {
-					opts = append(opts, "--mem="+strconv.Itoa(mem))
-				}
-				if swap >= 0 {
-					opts = append(opts, "--swap="+strconv.Itoa(swap))
-				}
-				if pids > 0 {
-					opts = append(opts, "--pids="+strconv.Itoa(pids))
-				}
-				if cpus > 0 {
-					opts = append(opts, "--cpus="+strconv.Itoa(cpus))
-				}
-				opts = append(opts, "--img="+imageShaHex)
-				args := append([]string{containerID}, cmdArgs...)
-				args = append(opts, args...)
-				args = append([]string{"child-mode"}, args...)
-				cmd = exec.Command("/proc/self/exe", args...)
-				cmd.Stdin = os.Stdin
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.SysProcAttr = &unix.SysProcAttr{
-					Cloneflags: unix.CLONE_NEWPID |
-		      unix.CLONE_NEWUSER |
-						unix.CLONE_NEWNS |
-						unix.CLONE_NEWUTS |
-						unix.CLONE_NEWIPC,
-				}
-				fmt.Printf("launching command %v for really reals\n", args)
-				doOrDie(cmd.Run())
-	*/
-
-	// unmount network namespace
-
-	// umount container fs
-
-	// remove cgroups
-
-	// remove container folder
-}
-
 // finalizePreparation ...
 func (wr *Wrangler) finalizePreparation(ct *Container) error {
 	errBuf := bytes.NewBuffer(nil)
 
 	cmd := &exec.Cmd{
 		Path:   "/proc/self/exe",
-		Args:   []string{"/proc/self/exe", wr.commandRoot, setupNetNS, ct.ID.String()},
+		Args:   []string{"/proc/self/exe", wr.commandRoot, setupNetNS, ct.id.String()},
 		Stdout: io.Discard,
 		Stderr: errBuf,
 	}
 	if err := cmd.Run(); err != nil {
-		zap.L().Error("stderr output from setup network namespace command", zap.String("output", errBuf.String()))
-		return fmt.Errorf("unable to run the setup network namespace command: %w", err)
+		wr.debugLog("unable to run network namespace setup command: %v\n", err)
+		wr.debugLog("stderr output from network namespace setup command:\n%v\n", errBuf.String())
+		return fmt.Errorf("unable to run the network namespace setup command: %w", err)
 	}
 
 	errBuf.Truncate(0)
 
 	cmd = &exec.Cmd{
 		Path:   "/proc/self/exe",
-		Args:   []string{"/proc/self/exe", wr.commandRoot, setupVeth, ct.ID.String()},
+		Args:   []string{"/proc/self/exe", wr.commandRoot, setupVeth, ct.id.String()},
 		Stdout: io.Discard,
 		Stderr: errBuf,
 	}
 	if err := cmd.Run(); err != nil {
-		zap.L().Error("stderr output from setup veth command", zap.String("output", errBuf.String()))
-		return fmt.Errorf("unable to run the setup vethcommand: %w", err)
+		wr.debugLog("unable to run veth setup command: %v\n", err)
+		wr.debugLog("stderr output from veth setup command:\n%v\n", errBuf.String())
+		return fmt.Errorf("unable to run the veth setup command: %w", err)
 	}
 
 	return nil
@@ -269,8 +227,8 @@ func (wr *Wrangler) finalizePreparation(ct *Container) error {
 
 // setupVirtualEthOnHost ...
 func (wr *Wrangler) setupVirtualEthOnHost(ct *Container) error {
-	veth0 := "veth0_" + ct.ID.String()[:6]
-	veth1 := "veth1_" + ct.ID.String()[:6]
+	veth0 := "veth0_" + ct.id.String()[:6]
+	veth1 := "veth1_" + ct.id.String()[:6]
 
 	linkAttrs := netlink.NewLinkAttrs()
 	linkAttrs.Name = veth0
@@ -326,7 +284,7 @@ func (wr *Wrangler) mountContainerOverlayFS(ct *Container) error {
 
 // getContainerFSHome  ...
 func (wr *Wrangler) getContainerFSHome(ct *Container) string {
-	return wr.run + "/containers/" + ct.ID.String() + "/fs"
+	return wr.run + "/containers/" + ct.id.String() + "/fs"
 }
 
 // createContainerDirectories ...
@@ -350,7 +308,7 @@ func (wr *Wrangler) createContainerDirectories(ct *Container) error {
 
 // containerPath ...
 func (wr *Wrangler) containerPath(ct *Container) string {
-	return wr.run + "/containers/" + ct.ID.String()
+	return wr.run + "/containers/" + ct.id.String()
 }
 
 // downloadImageByDistribution ...
@@ -376,7 +334,7 @@ func (wr *Wrangler) downloadImageByDistribution(ctx context.Context, dist, vers 
 	}
 
 	if err := wr.downloadImage(ctx, img); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to download image: %w", err)
 	}
 
 	return img, nil
@@ -384,23 +342,32 @@ func (wr *Wrangler) downloadImageByDistribution(ctx context.Context, dist, vers 
 
 // downloadImage  ...
 func (wr *Wrangler) downloadImage(ctx context.Context, img *Image) error {
+	wr.debugLog("creating temporary image location\n")
 	tmpPath, err := wr.createImageTemp(img)
 	if err != nil {
+		wr.debugLog("unable to temporary location '%v' for saving image: %v\n", tmpPath, err)
 		return err
 	}
 
+	wr.debugLog("saving image to temporary location\n")
 	if err := crane.SaveLegacy(img._img, img.Source(), tmpPath+"/"+packageFileName); err != nil {
+		wr.debugLog("unable to save image: %v\n", err)
 		return fmt.Errorf("unable to save image: %w", err)
 	}
 
+	wr.debugLog("extracting data from image tarball\n")
 	if err := wr.untarImageTarball(img); err != nil {
+		wr.debugLog("unable to extract: %v\n", err)
 		return fmt.Errorf("unable to extract image: %w", err)
 	}
 
+	wr.debugLog("processing layers from image tarball\n")
 	if err := wr.processLayers(img); err != nil {
+		wr.debugLog("unable to process image layers: %v\n", err)
 		return fmt.Errorf("unable to process image layers: %w", err)
 	}
 
+	wr.debugLog("saving distribution info to internal storage: %v:%v -> %v\n", img.dist, img.vers, img.SHA)
 	wr.addDistributionVersion(img.dist, img.vers, img.SHA)
 
 	return wr.cleanupImageTemp(img)
@@ -408,10 +375,11 @@ func (wr *Wrangler) downloadImage(ctx context.Context, img *Image) error {
 
 // cleanupImageTemp  ...
 func (wr *Wrangler) cleanupImageTemp(img *Image) error {
-	tmpPath := wr.tmp + "/" + img.ShortSHA()
-	if err := os.RemoveAll(tmpPath); err != nil {
-		return err
-	}
+	wr.debugLog("supposed to be cleaning up tmp, not doing that right now!\n")
+	// tmpPath := wr.tmp + "/" + img.ShortSHA()
+	// if err := os.RemoveAll(tmpPath); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -419,7 +387,7 @@ func (wr *Wrangler) cleanupImageTemp(img *Image) error {
 func (wr *Wrangler) createImageTemp(img *Image) (string, error) {
 	tmpPath := wr.tmp + "/" + img.ShortSHA()
 	if err := os.Mkdir(tmpPath, 0755); err != nil {
-		return "", fmt.Errorf("unable to create temporary directory '%v', got error: %w", tmpPath, err)
+		return tmpPath, fmt.Errorf("unable to create temporary directory '%v', got error: %w", tmpPath, err)
 	}
 	return tmpPath, nil
 }
@@ -428,33 +396,38 @@ func (wr *Wrangler) createImageTemp(img *Image) (string, error) {
 func (wr *Wrangler) processLayers(img *Image) error {
 	tmpPath := wr.tmp + "/" + img.ShortSHA()
 	imageManifestPath := tmpPath + "/manifest.json"
-	imageConfigPath := tmpPath + "/" + img.SHA + ".json"
+	imageConfigPath := tmpPath + "/sha256:" + img.SHA
 
+	wr.debugLog(
+		"processing layers\n\ttmp path: %v\n\timage manifest path: %v\n\timage config path: %v\n",
+		tmpPath, imageManifestPath, imageConfigPath,
+	)
+
+	wr.debugLog("parsing image manifest\n")
 	var mani imageManifest
 	err := parseManifest(imageManifestPath, &mani)
 	if err != nil {
+		wr.debugLog("unable to parse manifest '%v', reason: %v\n", imageManifestPath, err)
 		return err
 	}
 
+	wr.debugLog("handling image layers\n")
 	if err := wr.handleImageLayers(tmpPath, img, mani); err != nil {
+		wr.debugLog("unable to handle image layers in '%v', reason: %v\n", tmpPath, err)
 		return fmt.Errorf("unable to handle image layers: %w", err)
 	}
 
+	wr.debugLog("copying manifest '%v' to '%v'\n", imageManifestPath, wr.pathForImageManifest(img))
 	if err := wr.copyFile(imageManifestPath, wr.pathForImageManifest(img)); err != nil {
-		zap.L().Error(
-			"unable to copy image manifest path",
-			zap.String("source", imageManifestPath),
-			zap.String("target", wr.pathForImageManifest(img)),
-			zap.Error(err),
+		wr.debugLog("### unable to copy image manifest from '%v' to '%v'\nreason: %v\n",
+			imageManifestPath, wr.pathForImageManifest(img), err,
 		)
 	}
 
+	wr.debugLog("copying config '%v' to '%v'\n", imageConfigPath, wr.configPathForImage(img))
 	if err := wr.copyFile(imageConfigPath, wr.configPathForImage(img)); err != nil {
-		zap.L().Error(
-			"unable to copy image manifest path",
-			zap.String("source", imageConfigPath),
-			zap.String("target", wr.configPathForImage(img)),
-			zap.Error(err),
+		wr.debugLog("### unable to copy image config from '%v'\n\t\tto '%v'\nreason: %v\n",
+			imageConfigPath, wr.configPathForImage(img), err,
 		)
 	}
 
@@ -463,21 +436,29 @@ func (wr *Wrangler) processLayers(img *Image) error {
 
 // copyFile ...
 func (wr *Wrangler) copyFile(source, destination string) error {
+	wr.debugLog("copying file '%v' to '%v'\n", source, destination)
+	wr.debugLog("opening source '%v'\n", source)
 	in, err := os.Open(source)
 	if err != nil {
+		wr.debugLog("unable open source: %v\n", err)
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.Open(destination)
+	wr.debugLog("opening destionation: %v\n", destination)
+	out, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
+		wr.debugLog("unable to open destination: %v\n", err)
 		return err
 	}
 	defer out.Close()
 
-	if _, err := io.Copy(in, out); err != nil {
+	wr.debugLog("performing copy\n")
+	if _, err := io.Copy(out, in); err != nil {
+		wr.debugLog("error while copying: %v\n", err)
 		return err
 	}
+	wr.debugLog("successful copy!\n")
 
 	return nil
 }
@@ -485,21 +466,29 @@ func (wr *Wrangler) copyFile(source, destination string) error {
 // handleImageLayers ...
 func (wr *Wrangler) handleImageLayers(tmpPath string, img *Image, mani imageManifest) error {
 	imagesPath := wr.pathToImageDir(img.ShortSHA())
+	wr.debugLog("image path: %v\n", imagesPath)
 	if err := mkdirIfNotExist(imagesPath); err != nil {
+		wr.debugLog("unable to create directory '%v': %v\n", imagesPath, err)
 		return err
 	}
 
+	wr.debugLog("handling layers\n")
 	for _, layer := range mani[0].Layers {
 		layerDir := imagesPath + "/" + layer[:12] + "/fs"
+		wr.debugLog("layer '%v' directory: %v\n", layer, layerDir)
 		if err := mkdirIfNotExist(layerDir); err != nil {
+			wr.debugLog("unable to create layer directory: %v\n", err)
 			return fmt.Errorf("unable to create layer output directory: %w", err)
 		}
 
 		srcLayer := tmpPath + "/" + layer
-		if err := untar(srcLayer, layerDir); err != nil {
+		wr.debugLog("source layer: %v\nextracting!\n", srcLayer)
+		if err := wr.untar(srcLayer, layerDir); err != nil {
+			wr.debugLog("unable to extract source layer: %v\n", err)
 			return fmt.Errorf("unable to untar layer file '%s': %w", srcLayer, err)
 		}
 	}
+	wr.debugLog("finished handling layers!\n")
 
 	return nil
 }
@@ -512,7 +501,9 @@ func (wr *Wrangler) pathForImageManifest(img *Image) string {
 // configPathForImage ...
 func (wr *Wrangler) configPathForImage(img *Image) string {
 	sha := img.ShortSHA()
-	return wr.pathToImageDir(sha) + "/" + sha + ".json"
+	path := wr.pathToImageDir(sha) + "/" + sha + ".json"
+	wr.debugLog("\t-- config path for image '%v' -> '%v'\n", img.ShortSHA(), path)
+	return path
 }
 
 // imagePath  ...
@@ -521,10 +512,12 @@ func (wr *Wrangler) pathToImageDir(shortSHA string) string {
 }
 
 // untarImageTarball  ...
-func (wr Wrangler) untarImageTarball(img *Image) error {
+func (wr *Wrangler) untarImageTarball(img *Image) error {
 	pathDir := wr.tmp + "/" + img.ShortSHA()
 	pathTar := pathDir + "/" + packageFileName
-	return untar(pathTar, pathDir)
+	wr.debugLog("extracting from '%v' into '%v'\n", pathTar, pathDir)
+
+	return wr.untar(pathTar, pathDir)
 }
 
 // downloadManifest  ...
@@ -589,11 +582,11 @@ func (wr *Wrangler) addDistributionVersion(dist, vers, sha string) {
 
 // syncManifestToFile ...
 func (wr *Wrangler) syncManifestToFile() {
-	f, err := os.OpenFile(wr.manifestPath(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(wr.pathToKnownImageDB(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		zap.L().Error(
 			"unable to open manifest path",
-			zap.String("path", wr.manifestPath()),
+			zap.String("path", wr.pathToKnownImageDB()),
 			zap.Error(err),
 		)
 		return
@@ -603,7 +596,7 @@ func (wr *Wrangler) syncManifestToFile() {
 	if err := json.NewEncoder(f).Encode(wr.knownImages); err != nil {
 		zap.L().Error(
 			"unable to encode manifest to output file",
-			zap.String("path", wr.manifestPath()),
+			zap.String("path", wr.pathToKnownImageDB()),
 			zap.Error(err),
 		)
 	}
@@ -629,27 +622,27 @@ func (wr *Wrangler) shaExists(dist, sha string) bool {
 	return false
 }
 
-// loadOrCreateManifest  ...
-func (wr *Wrangler) loadOrCreateManifest() error {
-	st, err := os.Stat(wr.manifestPath())
+// loadOrCreateKnownImageDB  ...
+func (wr *Wrangler) loadOrCreateKnownImageDB() error {
+	wr.debugLog("checking if known-image db '%v' exists\n", wr.pathToKnownImageDB())
+	st, err := os.Stat(wr.pathToKnownImageDB())
 	if os.IsNotExist(err) {
+		wr.debugLog("db doesn't exist, creating\n")
 		return wr.createManifest()
 	}
-
-	if os.IsExist(err) {
-		return wr.loadManifest()
-	}
-
+	wr.debugLog("ensuring '%v' isn't a directory...", wr.pathToKnownImageDB())
 	if st.IsDir() {
-		return fmt.Errorf("manifest path '%v' points to directory", wr.manifestPath())
+		wr.debugLog("shoot! it's a directory\n")
+		return fmt.Errorf("manifest path '%v' points to directory", wr.pathToKnownImageDB())
 	}
 
-	return fmt.Errorf("unable to load or create manifest: %w", err)
+	wr.debugLog("all good, loading known image db!\n")
+	return wr.loadKnownImageData()
 }
 
-// loadManifest ...
-func (wr *Wrangler) loadManifest() error {
-	f, err := os.OpenFile(wr.manifestPath(), os.O_RDONLY, 0444)
+// loadKnownImageData ...
+func (wr *Wrangler) loadKnownImageData() error {
+	f, err := os.OpenFile(wr.pathToKnownImageDB(), os.O_RDONLY, 0444)
 	if err != nil {
 		return fmt.Errorf("unable to open manifest: %w", err)
 	}
@@ -669,9 +662,18 @@ func (wr *Wrangler) createManifest() error {
 	return nil
 }
 
-// manifestPath ...
-func (wr *Wrangler) manifestPath() string {
+// pathToKnownImageDB ...
+func (wr *Wrangler) pathToKnownImageDB() string {
 	return wr.lib + "/images.json"
+}
+
+// debugLog ...
+func (wr *Wrangler) debugLog(line string, args ...any) {
+	if !wr.debug {
+		return
+	}
+
+	_, _ = fmt.Fprintf(os.Stdout, line, args...)
 }
 
 func mkdirIfNotExist(path string) error {
@@ -727,6 +729,6 @@ func createMACAddress() net.HardwareAddr {
 	hw := make(net.HardwareAddr, 6)
 	hw[0] = 0x03
 	hw[1] = 0x43
-	rand.Read(hw[2:])
+	_, _ = rand.Read(hw[2:])
 	return hw
 }

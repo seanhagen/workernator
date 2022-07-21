@@ -26,7 +26,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "workernator",
+	Use:   "client",
 	Short: "A client for interacting with a running workernator server",
 	Long: `Workernator is a job-runner library, server, and CLI client used for
 long-running tasks you don't want to run as part of your core service.

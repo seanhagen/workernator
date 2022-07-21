@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const containerName = "alpine:3.16"
+//const containerName = "alpine:3.16"
 
 // JobInfo contains information about a job, whether it's running or
 // finished.
@@ -48,13 +48,13 @@ type Job struct {
 type ContainerToRun interface {
 	ID() xid.ID
 
-	SetStdout(io.Writer)
-	SetStderr(io.Writer)
+	SetStdOut(io.Writer)
+	SetStdErr(io.Writer)
 
 	Command() string
 	Args() []string
 
-	Start() error
+	Run() error
 	Wait() (int, error)
 	Kill() error
 }
@@ -68,16 +68,19 @@ func NewJob(ctx context.Context, outputDir string, container ContainerToRun) (*J
 
 	jobOutputDir := outputDir + "/" + id.String()
 	if err := os.MkdirAll(jobOutputDir, 0755); err != nil {
+		cancel()
 		return nil, fmt.Errorf("unable to create job output directory: %w", err)
 	}
 
 	stdoutFile, err := os.OpenFile(jobOutputDir+"/output", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("unable to create file to capture output: %w", err)
 	}
 
 	stderrFile, err := os.OpenFile(jobOutputDir+"/error", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("unable to create file to capture errors: %w", err)
 	}
 
@@ -87,14 +90,10 @@ func NewJob(ctx context.Context, outputDir string, container ContainerToRun) (*J
 		zap.String("stderr", jobOutputDir+"/output"),
 	)
 
-	container.SetStdout(stdoutFile)
-	container.SetStderr(stdoutFile)
+	container.SetStdOut(stdoutFile)
+	container.SetStdErr(stdoutFile)
 
-	// cmd := exec.Command(command, args...)
-	// cmd.Stdout = stdoutFile
-	// cmd.Stderr = stderrFile
-
-	if err := container.Start(); err != nil {
+	if err := container.Run(); err != nil {
 		cancel()
 		return nil, err
 	}

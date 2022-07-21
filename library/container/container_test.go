@@ -54,7 +54,7 @@ func TestContainer_Wrangler_GetImage(t *testing.T) {
 				testSource += ":" + defaultTag
 			}
 
-			var img *Container
+			var img *Image
 			img, err = wr.GetImage(ctx, testSource)
 			require.NoError(t, err)
 			require.NotNil(t, img)

@@ -9,7 +9,20 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/seanhagen/workernator/library"
+	"github.com/seanhagen/workernator/library/container"
 )
+
+const (
+	// WorkernatorServerCmdName should be used when creating the root command
+	WorkernatorServerCmdName = "workernator"
+	defaultImage             = "alpine:3.15"
+)
+
+// Wrangler ...
+type Wrangler interface {
+	GetImage(context.Context, string) (*container.Image, error)
+	PrepImageForLaunch(*container.Image) (*container.Container, error)
+}
 
 // Config is used by NewManager to configure a Manager before
 // returning it
@@ -17,6 +30,8 @@ type Config struct {
 	// OutputPath is where the manager will store the final output of a
 	// job
 	OutputPath string
+
+	Wrangler Wrangler
 }
 
 // Manager is what handles ( ie, manages ) jobs, including:
@@ -31,6 +46,8 @@ type Manager struct {
 	jobLock sync.Mutex
 
 	outputDir string
+
+	wrangler Wrangler
 }
 
 // NewManager builds a new Manager, and sets up any necessary directories
@@ -44,6 +61,7 @@ func NewManager(conf Config) (*Manager, error) {
 		jobs:      map[string]*library.Job{},
 		outputDir: conf.OutputPath,
 		jobLock:   sync.Mutex{},
+		wrangler:  conf.Wrangler,
 	}
 
 	return manager, nil
@@ -54,7 +72,20 @@ func NewManager(conf Config) (*Manager, error) {
 // the ability to wait for the job to finish, or to stop the job early
 // by killing it.
 func (m *Manager) StartJob(ctx context.Context, command string, args ...string) (*library.Job, error) {
-	job, err := library.NewJob(ctx, m.outputDir, command, args...)
+	img, err := m.wrangler.GetImage(ctx, defaultImage)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get image: %w", err)
+	}
+
+	cont, err := m.wrangler.PrepImageForLaunch(img)
+	if err != nil {
+		return nil, err
+	}
+
+	cont.SetCommand(command)
+	cont.SetArgs(args)
+
+	job, err := library.NewJob(ctx, m.outputDir, cont)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create job: %w", err)
 	}
@@ -63,7 +94,7 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	m.jobs[job.ID] = job
 	m.jobLock.Unlock()
 
-	return j, nil
+	return job, nil
 }
 
 // JobStatus returns the status of a job, whether it's running or

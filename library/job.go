@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/rs/xid"
 	"go.uber.org/zap"
 )
+
+const containerName = "alpine:3.16"
 
 // JobInfo contains information about a job, whether it's running or
 // finished.
@@ -31,9 +32,9 @@ type JobInfo struct {
 type Job struct {
 	JobInfo
 
-	cmd    *exec.Cmd
-	done   context.Context
-	cancel context.CancelFunc
+	container ContainerToRun
+	done      context.Context
+	cancel    context.CancelFunc
 
 	lock sync.RWMutex
 
@@ -42,10 +43,28 @@ type Job struct {
 	stderr     *os.File
 }
 
+// ContainerToRun is an interface describing the container being run
+// by a job.
+type ContainerToRun interface {
+	ID() xid.ID
+
+	SetStdout(io.Writer)
+	SetStderr(io.Writer)
+
+	Command() string
+	Args() []string
+
+	Start() error
+	Wait() (int, error)
+	Kill() error
+}
+
 // NewJob ...
-func NewJob(ctx context.Context, outputDir string, command string, args ...string) (*Job, error) {
+func NewJob(ctx context.Context, outputDir string, container ContainerToRun) (*Job, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	id := xid.New()
+	id := container.ID()
+
+	zap.L().Debug("new job for container", zap.String("container-id", id.String()))
 
 	jobOutputDir := outputDir + "/" + id.String()
 	if err := os.MkdirAll(jobOutputDir, 0755); err != nil {
@@ -62,11 +81,20 @@ func NewJob(ctx context.Context, outputDir string, command string, args ...strin
 		return nil, fmt.Errorf("unable to create file to capture errors: %w", err)
 	}
 
-	cmd := exec.Command(command, args...)
-	cmd.Stdout = stdoutFile
-	cmd.Stderr = stderrFile
+	zap.L().Debug(
+		"created stdout & stderr files for command",
+		zap.String("stdout", jobOutputDir+"/output"),
+		zap.String("stderr", jobOutputDir+"/output"),
+	)
 
-	if err := cmd.Start(); err != nil {
+	container.SetStdout(stdoutFile)
+	container.SetStderr(stdoutFile)
+
+	// cmd := exec.Command(command, args...)
+	// cmd.Stdout = stdoutFile
+	// cmd.Stderr = stderrFile
+
+	if err := container.Start(); err != nil {
 		cancel()
 		return nil, err
 	}
@@ -76,16 +104,15 @@ func NewJob(ctx context.Context, outputDir string, command string, args ...strin
 			ID:     id.String(),
 			Status: Running,
 
-			Command:   command,
-			Arguments: args,
+			Command:   container.Command(),
+			Arguments: container.Args(),
 
 			Started: time.Now(),
 		},
-		cmd:    cmd,
-		done:   ctx,
-		cancel: cancel,
-		lock:   sync.RWMutex{},
-
+		container:  container,
+		done:       ctx,
+		cancel:     cancel,
+		lock:       sync.RWMutex{},
 		outputPath: outputDir,
 		stdout:     stdoutFile,
 		stderr:     stderrFile,
@@ -101,7 +128,7 @@ func NewJob(ctx context.Context, outputDir string, command string, args ...strin
 // ( if any ) returned from the system when trying to kill the
 // job.
 func (j *Job) Stop() error {
-	err := j.cmd.Process.Kill()
+	err := j.container.Kill()
 	<-j.done.Done()
 	return err
 }
@@ -221,8 +248,7 @@ func (j *Job) closeOutputsWhenJobDone() {
 // waitForFinish ...
 func (j *Job) waitForFinish() {
 	defer j.cancel()
-	cmdErr := j.cmd.Wait()
-	exitCode := j.cmd.ProcessState.ExitCode()
+	exitCode, cmdErr := j.container.Wait()
 
 	j.lock.Lock()
 	defer j.lock.Unlock()

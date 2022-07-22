@@ -216,6 +216,13 @@ func (sa simpleAuth) isUserAllowed(ctx context.Context, method string, user user
 	}
 
 	for i, org := range user.org {
+		if len(user.orgUnit) < i+1 {
+			return ctx, false
+		}
+		if len(user.locality) < i+1 {
+			return ctx, false
+		}
+
 		unit := user.orgUnit[i]
 		loc := user.locality[i]
 

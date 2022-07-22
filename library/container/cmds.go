@@ -2,7 +2,6 @@ package container
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -45,28 +44,28 @@ func RunContainer() *cobra.Command {
 				TmpPath: "/tmp",
 			}
 
-			_, _ = fmt.Fprint(cmd.OutOrStdout(), "getting container wrangler\n")
+			// _, _ = fmt.Fprint(cmd.OutOrStdout(), "getting container wrangler\n")
 			wrangler, err := NewWrangler(conf)
 			if err != nil {
 				return fmt.Errorf("couldn't create wrangler: %w", err)
 			}
 
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "getting image '%v'\n", args[2])
+			// _, _ = fmt.Fprintf(cmd.OutOrStdout(), "getting image '%v'\n", args[2])
 			img, err := wrangler.GetImage(cmd.Context(), args[2])
 			if err != nil {
 				return err
 			}
 
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "prepparing image for launch\n")
+			// _, _ = fmt.Fprintf(cmd.OutOrStdout(), "prepparing image for launch\n")
 			cont, err := wrangler.PrepImageForLaunch(img)
 			if err != nil {
 				return fmt.Errorf("couldn't prepare container from image: %w", err)
 			}
 
-			_, _ = fmt.Fprintf(
-				cmd.OutOrStdout(),
-				"container ready, about to run '%v %v' in the container!\n",
-				args[3], strings.Join(args[4:], " "))
+			// _, _ = fmt.Fprintf(
+			// 	cmd.OutOrStdout(),
+			// 	"container ready, about to run '%v %v' in the container!\n",
+			// 	args[3], strings.Join(args[4:], " "))
 
 			if ioMbps > 0 {
 				args = append(args, "--ioMbps", strconv.Itoa(ioMbps))
@@ -127,9 +126,8 @@ func RunInNamespaceCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, _ = fmt.Fprintf(os.Stdout, "this is where the command gets all set up so it's ready to run\n")
-
-			_, _ = fmt.Fprintf(os.Stdout, "running as user:\n\teuid: %v\n\tuid: %v\n", os.Geteuid(), os.Getuid())
+			// _, _ = fmt.Fprintf(os.Stdout, "this is where the command gets all set up so it's ready to run\n")
+			// _, _ = fmt.Fprintf(os.Stdout, "running as user: euid: %v, uid: %v\n", os.Geteuid(), os.Getuid())
 
 			conf := Config{
 				LibPath: args[1],
@@ -188,15 +186,11 @@ func RunInNamespaceCmd() *cobra.Command {
 
 			// okay, non-cgroup stuff now
 
-			if err := wrangler.copyNameserverConfig(containerID); err != nil {
-				return err
-			}
+			// if err := wrangler.copyNameserverConfig(containerID); err != nil {
+			// 	return err
+			// }
 
-			if err := wrangler.mountProc(containerID); err != nil {
-				return err
-			}
-
-			// if err := wrangler.chrootContainer(containerID); err != nil {
+			// if err := wrangler.mountProc(containerID); err != nil {
 			// 	return err
 			// }
 
@@ -211,10 +205,23 @@ func RunInNamespaceCmd() *cobra.Command {
 				return err
 			}
 
+			// files, err := ioutil.ReadDir("/dev")
+			// if err != nil {
+			// 	wrangler.debugLog("unable to open '/dev' to read: %v\n", err)
+			// } else {
+			// 	for _, f := range files {
+			// 		wrangler.debugLog("found in /dev: %v\n", f.Name())
+			// 	}
+			// }
+
 			// if err := wrangler.setupLocalInterface(containerID); err != nil {
 			// 	if unmErr := wrangler.umountContainerDirectories(containerID); unmErr != nil {
 			// 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "unable to unmount container directories: %v\n", unmErr)
 			// 	}
+			// 	return err
+			// }
+
+			// if err := wrangler.chrootContainer(containerID); err != nil {
 			// 	return err
 			// }
 
@@ -263,24 +270,6 @@ func RunInNamespaceCmd() *cobra.Command {
 	cmd.Flags().IntVar(&ioIops, "ioIops", -1, "sets max iops for io")
 	return cmd
 }
-
-// // LaunchJobCmd handles the the last bits of setup before running the actual
-// // 'job' command the user has requested.
-// func LaunchJobCmd() *cobra.Command {
-// 	return &cobra.Command{
-// 		Use:    finalRun,
-// 		Short:  "special command, do not use",
-// 		Hidden: true,
-// 		PreRunE: func(cmd *cobra.Command, args []string) error {
-// 			return nil
-// 		},
-// 		RunE: func(cmd *cobra.Command, args []string) error {
-// 			spew.Dump(args)
-// 			fmt.Fprintf(os.Stdout, "this is where some final setup happens, and then the /actual/ job command gets run\n")
-// 			return nil
-// 		},
-// 	}
-// }
 
 // SetupNetNS ...
 func SetupNetNS() *cobra.Command {

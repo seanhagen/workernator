@@ -71,8 +71,9 @@ func (wr *Wrangler) downloadImage(ctx context.Context, img *Image) error {
 		return err
 	}
 
-	wr.debugLog("saving image to temporary location\n")
-	if err := crane.SaveLegacy(img._img, img.Source(), tmpPath+"/"+packageFileName); err != nil {
+	output := tmpPath + "/" + packageFileName
+	wr.debugLog("saving image '%v' to temporary location '%v'\n", img.Source(), output)
+	if err := crane.SaveLegacy(img._img, img.Source(), output); err != nil {
 		wr.debugLog("unable to save image: %v\n", err)
 		return fmt.Errorf("unable to save image: %w", err)
 	}

@@ -103,13 +103,21 @@ func (c *Container) Run(ctx context.Context) error {
 
 		SysProcAttr: &syscall.SysProcAttr{
 			Pdeathsig: unix.SIGTERM,
-			Cloneflags: syscall.CLONE_NEWUSER |
+			Cloneflags: syscall.CLONE_NEWNS |
 				syscall.CLONE_NEWUTS |
-				syscall.CLONE_NEWNS |
+				syscall.CLONE_NEWIPC |
 				syscall.CLONE_NEWPID |
-				unix.CLONE_NEWNET,
-
+				syscall.CLONE_NEWNET |
+				syscall.CLONE_NEWUSER,
 			Unshareflags: syscall.CLONE_NEWNS,
+
+			// Cloneflags: syscall.CLONE_NEWUSER |
+			// 	syscall.CLONE_NEWUTS |
+			// 	syscall.CLONE_NEWNS |
+			// 	syscall.CLONE_NEWPID |
+			// 	syscall.CLONE_NEWIPC |
+			// 	unix.CLONE_NEWNET,
+			// Unshareflags: syscall.CLONE_NEWNS,
 			// Unshareflags: syscall.CLONE_NEWNS |
 			// 	unix.CLONE_NEWCGROUP |
 			// 	unix.CLONE_NEWUTS |
@@ -122,6 +130,9 @@ func (c *Container) Run(ctx context.Context) error {
 			GidMappings: []syscall.SysProcIDMap{
 				{ContainerID: 0, HostID: os.Getgid(), Size: 1},
 			},
+			GidMappingsEnableSetgroups: true,
+
+			AmbientCaps: []uintptr{27}, // was syscall.SYS_MKNOD, but include/uapi/linux/capability.h says it's 27?
 		},
 	}
 	c.cmd = cmd
@@ -147,20 +158,20 @@ func (c *Container) cleanupWhenDone() {
 		_, _ = fmt.Fprintf(os.Stderr, "unable to unmount network namespace: %v\n", err)
 	}
 
-	_, _ = fmt.Fprintf(os.Stdout, "umounting container fs\n")
-	if err := unmountContainerFS(c.id.String(), c.pathToRunDir); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "unable to umount container filesystem: %v\n", err)
-	}
+	// _, _ = fmt.Fprintf(os.Stdout, "umounting container fs\n")
+	// if err := unmountContainerFS(c.id.String(), c.pathToRunDir); err != nil {
+	// 	_, _ = fmt.Fprintf(os.Stderr, "unable to umount container filesystem: %v\n", err)
+	// }
 
 	_, _ = fmt.Fprintf(os.Stdout, "removing container from cgroups\n")
 	if err := removeContainerCGroups(c.id.String()); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container cgroups: %v\n", err)
 	}
 
-	_, _ = fmt.Fprintf(os.Stdout, "removing container fs directory\n")
-	if err := os.RemoveAll(c.pathToContainerFs); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container dir '%v': %v", c.pathToContainerFs, err)
-	}
+	// _, _ = fmt.Fprintf(os.Stdout, "removing container fs directory\n")
+	// if err := os.RemoveAll(c.pathToContainerFs); err != nil {
+	// 	_, _ = fmt.Fprintf(os.Stderr, "unable to remove container dir '%v': %v", c.pathToContainerFs, err)
+	// }
 	c.cancel()
 
 }

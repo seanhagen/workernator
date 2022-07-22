@@ -113,6 +113,27 @@ func (s *Service) Start(ctx context.Context, req *pb.JobStartRequest) (*pb.Job, 
 	return jobinfoToProtobuf(&info), nil
 }
 
+type identifier interface {
+	GetId() string
+}
+
+// getKnownJobID ...
+func (s *Service) getKnownJobID(req identifier, perm grpc.Permission, user string) (string, error) {
+	tmp := strings.TrimSpace(req.GetId())
+	id, err := xid.FromString(tmp)
+	if err != nil {
+		return "", status.Error(codes.InvalidArgument, fmt.Sprintf("'%v' is not a valid id: %v", tmp, err))
+	}
+
+	// if we don't know what the job is or the user doesn't have the
+	// permissions to stop the job then we return a 'not found' error
+	if !s.isKnownJob(id.String()) || !s.userCreatedJob(perm, user, id.String()) {
+		return "", status.Error(codes.NotFound, fmt.Sprintf("no job found for id '%s'", id.String()))
+	}
+
+	return id.String(), nil
+}
+
 // Stop handles stopping a job
 func (s *Service) Stop(ctx context.Context, req *pb.JobStopRequest) (*pb.Job, error) {
 	user, perm, err := grpc.GetUserAndPermission(ctx)
@@ -120,19 +141,12 @@ func (s *Service) Stop(ctx context.Context, req *pb.JobStopRequest) (*pb.Job, er
 		return nil, err
 	}
 
-	tmp := strings.TrimSpace(req.GetId())
-	id, err := xid.FromString(tmp)
+	id, err := s.getKnownJobID(req, perm, user)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("'%v' is not a valid id: %v", tmp, err))
+		return nil, err
 	}
 
-	// if we don't know what the job is or the user doesn't have the
-	// permissions to stop the job then we return a 'not found' error
-	if !s.isKnownJob(id.String()) || !s.userCreatedJob(perm, user, id.String()) {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("no job found for id '%s'", id.String()))
-	}
-
-	job, err := s.manager.StopJob(ctx, id.String())
+	job, err := s.manager.StopJob(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -147,17 +161,12 @@ func (s *Service) Status(ctx context.Context, req *pb.JobStatusRequest) (*pb.Job
 		return nil, err
 	}
 
-	tmp := strings.TrimSpace(req.GetId())
-	id, err := xid.FromString(tmp)
+	id, err := s.getKnownJobID(req, perm, user)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("'%v' is not a valid id: %v", tmp, err))
+		return nil, err
 	}
 
-	if !s.isKnownJob(id.String()) || !s.userCreatedJob(perm, user, id.String()) {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("no job found for id '%s'", id.String()))
-	}
-
-	job, err := s.manager.JobStatus(ctx, id.String())
+	job, err := s.manager.JobStatus(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -172,17 +181,12 @@ func (s *Service) Output(req *pb.OutputJobRequest, strm pb.Service_OutputServer)
 		return err
 	}
 
-	tmp := strings.TrimSpace(req.GetId())
-	id, err := xid.FromString(tmp)
+	id, err := s.getKnownJobID(req, perm, user)
 	if err != nil {
-		return status.Error(codes.InvalidArgument, fmt.Sprintf("'%v' is not a valid id: %v", tmp, err))
+		return err
 	}
 
-	if !s.isKnownJob(id.String()) || !s.userCreatedJob(perm, user, id.String()) {
-		return status.Error(codes.NotFound, fmt.Sprintf("no job found for id '%s'", id.String()))
-	}
-
-	output, err := s.manager.GetJobOutput(strm.Context(), id.String())
+	output, err := s.manager.GetJobOutput(strm.Context(), id)
 	if err != nil {
 		return status.Error(codes.Internal, fmt.Sprintf("unable to get job output: %v", err))
 	}

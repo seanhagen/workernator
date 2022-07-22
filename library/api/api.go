@@ -43,7 +43,6 @@ func NewManager(conf Config) (*Manager, error) {
 	manager := &Manager{
 		jobs:      map[string]*library.Job{},
 		outputDir: conf.OutputPath,
-		jobLock:   sync.Mutex{},
 	}
 
 	return manager, nil

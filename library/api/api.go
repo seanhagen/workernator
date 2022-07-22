@@ -69,7 +69,7 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 // already finished. If the ID provided is either not a valid xid or
 // not the ID of a job an error will be returned.
 func (m *Manager) JobStatus(ctx context.Context, id string) (*library.JobInfo, error) {
-	job, err := m.validateID(id)
+	job, err := m.getJob(id)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (m *Manager) JobStatus(ctx context.Context, id string) (*library.JobInfo, e
 // provided is either not a valid xid or not the ID of a job an error
 // will be returned.
 func (m *Manager) StopJob(ctx context.Context, id string) (*library.JobInfo, error) {
-	job, err := m.validateID(id)
+	job, err := m.getJob(id)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (m *Manager) StopJob(ctx context.Context, id string) (*library.JobInfo, err
 // output of a job. If the ID provided is either not a valid xid or
 // not the ID of a job an error will be returned.
 func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.ReadCloser, error) {
-	job, err := m.validateID(id)
+	job, err := m.getJob(id)
 	if err != nil {
 		return nil, err
 	}
@@ -106,9 +106,9 @@ func (m *Manager) GetJobOutput(ctx context.Context, id string) (io.ReadCloser, e
 	return job.GetOutput()
 }
 
-// validateID validates that the ID given is a valid xid, and the ID
+// getJob validates that the ID given is a valid xid, and the ID
 // of a job started by this manager.
-func (m *Manager) validateID(id string) (*library.Job, error) {
+func (m *Manager) getJob(id string) (*library.Job, error) {
 	if _, err := xid.FromString(id); err != nil {
 		return nil, library.NewErrInvalidID(id, err)
 	}

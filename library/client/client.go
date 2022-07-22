@@ -65,6 +65,12 @@ func NewClient(ctx context.Context, conf Config) (*Client, error) {
 	return client, nil
 }
 
+// Close closes the client connection to the server and returns
+// any error that occured during the process.
+func (c *Client) Close() error {
+	return c.conn.Close()
+}
+
 func setupTLS(conf Config) (grpc.DialOption, error) {
 	cert, err := tls.LoadX509KeyPair(conf.CertPath, conf.KeyPath)
 	if err != nil {

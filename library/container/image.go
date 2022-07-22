@@ -204,19 +204,19 @@ func (wr *Wrangler) loadKnownImageData() error {
 
 // loadOrCreateKnownImageDB  ...
 func (wr *Wrangler) loadOrCreateKnownImageDB() error {
-	wr.debugLog("checking if known-image db '%v' exists\n", wr.pathToKnownImageDB())
+	//wr.debugLog("checking if known-image db '%v' exists\n", wr.pathToKnownImageDB())
 	st, err := os.Stat(wr.pathToKnownImageDB())
 	if os.IsNotExist(err) {
 		wr.debugLog("db doesn't exist, creating\n")
 		return wr.createManifest()
 	}
-	wr.debugLog("ensuring '%v' isn't a directory...", wr.pathToKnownImageDB())
+	//wr.debugLog("ensuring '%v' isn't a directory...", wr.pathToKnownImageDB())
 	if st.IsDir() {
 		wr.debugLog("shoot! it's a directory\n")
 		return fmt.Errorf("manifest path '%v' points to directory", wr.pathToKnownImageDB())
 	}
 
-	wr.debugLog("all good, loading known image db!\n")
+	//wr.debugLog("all good, loading known image db!\n")
 	return wr.loadKnownImageData()
 }
 

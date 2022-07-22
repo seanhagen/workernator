@@ -74,7 +74,17 @@ func buildServerBinary() error {
 
 	fmt.Print("[BUILD][SERVER] building server...")
 	binaryOut := buildDir + "/server"
-	err := sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
+	//sh.Exec(env map[string]string, stdout io.Writer, stderr io.Writer, cmd string, args ...string)
+
+	env := map[string]string{
+		"CGO_ENABLED": "0",
+		"GOOS":        "linux",
+	}
+
+	_, err := sh.Exec(env, os.Stdout, os.Stderr,
+		"go", "build", "-o", binaryOut, "./cmd/server",
+	)
+	//err := sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
 	if err != nil {
 		fmt.Println(" ERROR")
 		return err

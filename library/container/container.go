@@ -109,15 +109,12 @@ func (c *Container) Run(ctx context.Context) error {
 				syscall.CLONE_NEWPID |
 				unix.CLONE_NEWNET,
 
-			// Unshareflags: syscall.CLONE_NEWNS,
-			Unshareflags: syscall.CLONE_NEWNS |
-				unix.CLONE_NEWCGROUP |
-				unix.CLONE_NEWUTS |
-				unix.CLONE_NEWNET,
+			Unshareflags: syscall.CLONE_NEWNS,
+			// Unshareflags: syscall.CLONE_NEWNS |
+			// 	unix.CLONE_NEWCGROUP |
+			// 	unix.CLONE_NEWUTS |
+			// 	unix.CLONE_NEWNET,
 
-			// UidMappings: []syscall.SysProcIDMap{
-			// 	{ContainerID: 0, HostID: 1000, Size: 1},
-			// },
 			UidMappings: []syscall.SysProcIDMap{
 				{ContainerID: 0, HostID: os.Getuid(), Size: 1},
 			},
@@ -144,7 +141,6 @@ func (c *Container) Run(ctx context.Context) error {
 func (c *Container) cleanupWhenDone() {
 	c.exitError = c.cmd.Wait()
 	c.exitCode = c.cmd.ProcessState.ExitCode()
-	c.cancel()
 
 	_, _ = fmt.Fprintf(os.Stdout, "umounting network namespace\n")
 	if err := unmountNetworkNamespace(c.id.String(), c.pathToRunDir); err != nil {
@@ -165,6 +161,8 @@ func (c *Container) cleanupWhenDone() {
 	if err := os.RemoveAll(c.pathToContainerFs); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container dir '%v': %v", c.pathToContainerFs, err)
 	}
+	c.cancel()
+
 }
 
 // Wait  ...

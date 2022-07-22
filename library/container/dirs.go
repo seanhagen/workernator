@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -86,6 +87,157 @@ func (wr *Wrangler) pivotRoot(containerID string) error {
 	return nil
 }
 
+// chrootContainer ...
+func (wr *Wrangler) chrootContainer(containerID string) error {
+	mntPath := "./" + wr.getContainerFSHome(containerID) + "/mnt"
+	wr.debugLog("praring to chroot, mount path: %v\n", mntPath)
+
+	if err := unix.Chroot(mntPath); err != nil {
+		return fmt.Errorf("unable set '%v' as chroot: %w", mntPath, err)
+	}
+
+	if err := os.Chdir("/"); err != nil {
+		return fmt.Errorf("unable to change directory to /: %w", err)
+	}
+
+	return nil
+}
+
+// mountContainerDirectories ...
+func (wr *Wrangler) mountContainerDirectories(containerID string) error {
+	wr.debugLog("time to mount container directories\n")
+	create := []string{"/proc", "/sys"} //, "/tmp"}
+	for _, toCreate := range create {
+		wr.debugLog("need to create %v...", toCreate)
+		if _, err := os.Stat(toCreate); os.IsNotExist(err) {
+			wr.debugLog(" it doesn't exist yet... ")
+			if err = os.MkdirAll(toCreate, 0755); err != nil {
+				wr.debugLog(" unable to create: %v\n", err)
+				return err
+			}
+			wr.debugLog("created!\n")
+		} else {
+			wr.debugLog("directory already exists? (%v)\n", err)
+		}
+	}
+
+	wr.debugLog("mountContainerDirectories => running as user: euid: %v, uid: %v\n", os.Geteuid(), os.Getuid())
+
+	newRoot := wr.getContainerFSHome(containerID) + "/mnt"
+
+	mounts := []struct {
+		source  string
+		target  string
+		fsType  string
+		flags   uint
+		options string
+	}{
+		{source: "proc", target: newRoot + "/proc", fsType: "proc"},
+		//{source: "sysfs", target: newRoot + "/sys", fsType: "sysfs"},
+		// {source: "tmpfs", target: newRoot + "/tmp", fsType: "tempfs"},
+		{
+			source:  "tmpfs",
+			target:  newRoot + "/dev",
+			fsType:  "tmpfs",
+			flags:   unix.MS_NOSUID | unix.MS_STRICTATIME,
+			options: "mode=755",
+		},
+		{
+			source: "devpts",
+			target: newRoot + "/dev/pts",
+			fsType: "devpts",
+		},
+	}
+
+	for _, mnt := range mounts {
+		// ensure mount target exists
+		wr.debugLog("mkdirall: %v\n", mnt.target)
+		if err := os.MkdirAll(mnt.target, os.ModePerm); err != nil {
+			return fmt.Errorf("unable to create target '%v': %w", mnt.target, err)
+		}
+
+		// mount
+		wr.debugLog("mount: %v (%v)\n", mnt.source, mnt.fsType)
+		flags := uintptr(mnt.flags)
+		if err := unix.Mount(mnt.source, mnt.target, mnt.fsType, flags, mnt.options); err != nil {
+			return fmt.Errorf("unable to mount '%v' to '%v' (type: %v): %w", mnt.source, mnt.target, mnt.fsType, err)
+		}
+	}
+
+	for i, name := range []string{"stdin", "stdout", "stderr"} {
+		source := "/proc/self/fd/" + strconv.Itoa(i)
+		target := newRoot + "/dev/" + name
+
+		wr.debugLog("symlinking '%v': %v to %v\n", name, source, target)
+		err := unix.Symlink(source, target)
+		if err != nil {
+			return fmt.Errorf("unable to symlink %v to %v: %w", source, target, err)
+		}
+	}
+
+	wr.debugLog("newroot: %v\n", newRoot)
+	wr.debugLog("about to setup special devices\n")
+	devices := []struct {
+		name  string
+		attr  uint32
+		major uint32
+		minor uint32
+	}{
+		{name: "null", attr: 0666 | unix.S_IFCHR, major: 1, minor: 3},
+		{name: "zero", attr: 0666 | unix.S_IFCHR, major: 1, minor: 3},
+		{name: "random", attr: 0666 | unix.S_IFCHR, major: 1, minor: 8},
+		{name: "urandom", attr: 0666 | unix.S_IFCHR, major: 1, minor: 9},
+		{name: "console", attr: 0666 | unix.S_IFCHR, major: 136, minor: 1},
+		{name: "tty", attr: 0666 | unix.S_IFCHR, major: 5, minor: 0},
+		{name: "full", attr: 0666 | unix.S_IFCHR, major: 1, minor: 7},
+	}
+	for _, dev := range devices {
+		dt := int(unix.Mkdev(dev.major, dev.minor))
+
+		devName := newRoot + "/dev/" + dev.name
+		// devName := "/dev/" + dev.name
+		wr.debugLog("mknod: '%v' (%v) -> '%v'\n", dev.name, dt, devName)
+
+		if err := unix.Mknod(devName, dev.attr, dt); err != nil {
+			return fmt.Errorf("unable to mknod: %w (uid: %v gid: %v euid: %v)",
+				err, os.Getuid(), os.Getgid(), os.Geteuid())
+		}
+	}
+
+	// wr.debugLog("mounting /proc file system\n")
+	// if err := unix.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+	// 	return fmt.Errorf("unable to mount proc: %w", err)
+	// }
+
+	// wr.debugLog("mounting /tmp file system\n")
+	// if err := unix.Mount("tmpfs", "/tmp", "tmpfs", 0, ""); err != nil {
+	// 	return fmt.Errorf("unable to mount tmp: %w", err)
+	// }
+
+	// wr.debugLog("mounting /dev file system\n")
+	// if err := unix.Mount("devtmpfs", "/dev", "tmpfs", 0, ""); err != nil {
+	// 	return fmt.Errorf("uanble to mount dev: %w", err)
+	// }
+
+	// wr.debugLog("creating '/dev/pts' folder\n")
+	// if err := os.MkdirAll("/dev/pts", 0755); err != nil {
+	// 	return fmt.Errorf("unable to create /dev/pts: %w", err)
+	// }
+
+	// wr.debugLog("mounting /dev/pts file system\n")
+	// if err := unix.Mount("devpts", "/dev/pts", "devpts", 0, ""); err != nil {
+	// 	return fmt.Errorf("unable to mount /dev/pts: %w", err)
+	// }
+
+	// wr.debugLog("creating /sys file system\n")
+	// if err := unix.Mount("sysfs", "/sys", "sysfs", 0, ""); err != nil {
+	// 	return fmt.Errorf("unable to mount /sys: %w", err)
+	// }
+
+	wr.debugLog("all required directories set up!\n")
+	return nil
+}
+
 //mountContainerOverlayFS ...
 func (wr *Wrangler) mountContainerOverlayFS(ct *Container) error {
 	manifestPath := wr.pathForImageManifest(ct.img)
@@ -108,8 +260,12 @@ func (wr *Wrangler) mountContainerOverlayFS(ct *Container) error {
 	mntOptions := "lowerdir=" + strings.Join(srcLayers, ":") +
 		",upperdir=" + containerFSHome + "/upper,workdir=" +
 		containerFSHome + "/work"
-	if err := unix.Mount("none", containerFSHome+"/mnt", "overlay", 0, mntOptions); err != nil {
+	if err := unix.Mount("none", containerFSHome+"/mnt", "overlay", uintptr(unix.MS_NODEV), mntOptions); err != nil {
 		return fmt.Errorf("unable to mount container overlay fs: %w", err)
+	}
+
+	if err := unix.Mount("", "/", "", uintptr(unix.MS_PRIVATE|unix.MS_REC), ""); err != nil {
+		return fmt.Errorf("unable to remount /: %w", err)
 	}
 
 	return nil
@@ -150,74 +306,6 @@ func (wr *Wrangler) createContainerDirectories(ct *Container) error {
 		}
 	}
 
-	return nil
-}
-
-// chrootContainer ...
-func (wr *Wrangler) chrootContainer(containerID string) error {
-	mntPath := wr.getContainerFSHome(containerID) + "/mnt"
-	wr.debugLog("mount path: %v\n", mntPath)
-
-	// if err := unix.Chroot(mntPath); err != nil {
-	// 	return fmt.Errorf("unable set '%v' as chroot: %w", mntPath, err)
-	// }
-
-	if err := os.Chdir("/"); err != nil {
-		return fmt.Errorf("unable to change directory to /: %w", err)
-	}
-
-	return nil
-}
-
-// mountContainerDirectories ...
-func (wr *Wrangler) mountContainerDirectories(containerID string) error {
-	wr.debugLog("time to mount container directories\n")
-	create := []string{"/proc", "/sys"} //, "/tmp"}
-	for _, toCreate := range create {
-		wr.debugLog("need to create %v...", toCreate)
-		if _, err := os.Stat(toCreate); os.IsNotExist(err) {
-			wr.debugLog(" it doesn't exist yet... ")
-			if err = os.MkdirAll(toCreate, 0755); err != nil {
-				wr.debugLog(" unable to create: %v\n", err)
-				return err
-			}
-			wr.debugLog("created!\n")
-		} else {
-			wr.debugLog("directory already exists? (%v)\n", err)
-		}
-	}
-
-	wr.debugLog("mounting /proc file system\n")
-	if err := unix.Mount("proc", "/proc", "proc", 0, ""); err != nil {
-		return fmt.Errorf("unable to mount proc: %w", err)
-	}
-
-	wr.debugLog("mounting /tmp file system\n")
-	if err := unix.Mount("tmpfs", "/tmp", "tmpfs", 0, ""); err != nil {
-		return fmt.Errorf("unable to mount tmp: %w", err)
-	}
-
-	wr.debugLog("mounting /dev file system\n")
-	if err := unix.Mount("devtmpfs", "/dev", "tmpfs", 0, ""); err != nil {
-		return fmt.Errorf("uanble to mount dev: %w", err)
-	}
-
-	// wr.debugLog("creating '/dev/pts' folder\n")
-	// if err := os.MkdirAll("/dev/pts", 0755); err != nil {
-	// 	return fmt.Errorf("unable to create /dev/pts: %w", err)
-	// }
-
-	// wr.debugLog("mounting /dev/pts file system\n")
-	// if err := unix.Mount("devpts", "/dev/pts", "devpts", 0, ""); err != nil {
-	// 	return fmt.Errorf("unable to mount /dev/pts: %w", err)
-	// }
-
-	// wr.debugLog("creating /sys file system\n")
-	// if err := unix.Mount("sysfs", "/sys", "sysfs", 0, ""); err != nil {
-	// 	return fmt.Errorf("unable to mount /sys: %w", err)
-	// }
-
-	wr.debugLog("all required directories set up!\n")
 	return nil
 }
 

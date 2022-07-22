@@ -62,7 +62,7 @@ func (m *Manager) StartJob(ctx context.Context, command string, args ...string) 
 	m.jobs[job.ID] = job
 	m.jobLock.Unlock()
 
-	return j, nil
+	return job, nil
 }
 
 // JobStatus returns the status of a job, whether it's running or

@@ -15,12 +15,7 @@ import (
 )
 
 func TestLibrary_NewManager(t *testing.T) {
-	path := "./testdata/new-manager"
-	require.NoError(t, os.MkdirAll(path, 0755))
-	t.Cleanup(func() {
-		require.NoError(t, os.RemoveAll(path))
-	})
-
+	path := t.TempDir()
 	conf := Config{
 		OutputPath: path,
 	}
@@ -33,17 +28,9 @@ func TestLibrary_NewManager(t *testing.T) {
 }
 
 func TestLibrary_Manager_StartJob(t *testing.T) {
-	path := "./testdata/start_job"
-	require.NoError(t, os.MkdirAll(path, 0755))
+	path := t.TempDir()
 	conf := Config{
 		OutputPath: path,
-	}
-
-	cleanup := getLowerCaseEnvVar("TEST_DO_CLEANUP")
-	if cleanup == "" || cleanup == "yes" {
-		t.Cleanup(func() {
-			require.NoError(t, os.RemoveAll(path))
-		})
 	}
 
 	mng, err := NewManager(conf)
@@ -98,15 +85,7 @@ func TestLibrary_Manager_StartJob(t *testing.T) {
 }
 
 func TestLibrary_Manager_StopJob(t *testing.T) {
-	path := "./testdata/stop-job"
-	require.NoError(t, os.MkdirAll(path, 0755))
-
-	cleanup := getLowerCaseEnvVar("TEST_DO_CLEANUP")
-	if cleanup == "" || cleanup == "yes" {
-		t.Cleanup(func() {
-			require.NoError(t, os.RemoveAll(path))
-		})
-	}
+	path := t.TempDir()
 	conf := Config{
 		OutputPath: path,
 	}
@@ -158,15 +137,7 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 }
 
 func TestLibrary_Manager_JobStatus(t *testing.T) {
-	path := "./testdata/stop-job"
-	require.NoError(t, os.MkdirAll(path, 0755))
-
-	cleanup := getLowerCaseEnvVar("TEST_DO_CLEANUP")
-	if cleanup == "" || cleanup == "yes" {
-		t.Cleanup(func() {
-			require.NoError(t, os.RemoveAll(path))
-		})
-	}
+	path := t.TempDir()
 	conf := Config{
 		OutputPath: path,
 	}
@@ -211,20 +182,12 @@ func TestLibrary_Manager_JobStatus(t *testing.T) {
 }
 
 func TestLibrary_Manager_Output(t *testing.T) {
-	path := "./testdata/output"
-	require.NoError(t, os.MkdirAll(path, 0755))
-
 	skipSlow := getLowerCaseEnvVar("SKIP_SLOW_TESTS")
 	if skipSlow != "" {
 		t.Skip("TEST_ALLOW_SLOW environment variable set")
 	}
 
-	cleanup := getLowerCaseEnvVar("TEST_DO_CLEANUP")
-	if cleanup == "" || cleanup == "yes" {
-		t.Cleanup(func() {
-			require.NoError(t, os.RemoveAll(path))
-		})
-	}
+	path := t.TempDir()
 	conf := Config{
 		OutputPath: path,
 	}

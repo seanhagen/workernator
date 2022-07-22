@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -47,19 +48,23 @@ func NewJob(ctx context.Context, outputDir string, command string, args ...strin
 	ctx, cancel := context.WithCancel(ctx)
 	id := xid.New()
 
-	jobOutputDir := outputDir + "/" + id.String()
+	jobOutputDir := filepath.Join(outputDir, id.String())
 	if err := os.MkdirAll(jobOutputDir, 0755); err != nil {
 		cancel()
 		return nil, fmt.Errorf("unable to create job output directory: %w", err)
 	}
 
-	stdoutFile, err := os.OpenFile(jobOutputDir+"/output", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
+	stdoutFile, err := os.OpenFile(
+		filepath.Join(jobOutputDir, "/output"),
+		os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("unable to create file to capture output: %w", err)
 	}
 
-	stderrFile, err := os.OpenFile(jobOutputDir+"/error", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
+	stderrFile, err := os.OpenFile(
+		filepath.Join(jobOutputDir, "/error"),
+		os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("unable to create file to capture errors: %w", err)

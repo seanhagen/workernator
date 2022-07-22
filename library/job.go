@@ -49,16 +49,19 @@ func NewJob(ctx context.Context, outputDir string, command string, args ...strin
 
 	jobOutputDir := outputDir + "/" + id.String()
 	if err := os.MkdirAll(jobOutputDir, 0755); err != nil {
+		cancel()
 		return nil, fmt.Errorf("unable to create job output directory: %w", err)
 	}
 
 	stdoutFile, err := os.OpenFile(jobOutputDir+"/output", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("unable to create file to capture output: %w", err)
 	}
 
 	stderrFile, err := os.OpenFile(jobOutputDir+"/error", os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("unable to create file to capture errors: %w", err)
 	}
 

@@ -28,7 +28,7 @@ type Config struct {
 // It should be initialized using NewManager(conf Config).
 type Manager struct {
 	jobs    map[string]*library.Job
-	jobLock sync.Mutex
+	jobLock sync.RWMutex
 
 	outputDir string
 }
@@ -113,7 +113,9 @@ func (m *Manager) getJob(id string) (*library.Job, error) {
 		return nil, library.NewErrInvalidID(id, err)
 	}
 
+	m.jobLock.RLock()
 	job, ok := m.jobs[id]
+	m.jobLock.RUnlock()
 	if !ok {
 		return nil, library.NewErrNoJobForID(id)
 	}

@@ -29,7 +29,7 @@ func TestInternal_NewServer(t *testing.T) {
 		Port: "8080",
 
 		CertPath:  "./testdata/server.pem",
-		KeyPath:   "./testdata/cakey.key",
+		KeyPath:   "./testdata/ca.key",
 		ChainPath: "./testdata/ca.pem",
 
 		ACL: UserPermissions{
@@ -64,7 +64,7 @@ func TestInternal_NewServer(t *testing.T) {
 	})
 
 	go func() {
-		err = server.Start(ctx)
+		err := server.Start(ctx)
 		require.NoError(t, err)
 	}()
 
@@ -74,7 +74,7 @@ func TestInternal_NewServer(t *testing.T) {
 		}
 	})
 
-	tlsDialOpt, err := setupClientCerts(t, "./testdata/client.pem", "./testdata/cakey.key", "./testdata/ca.pem")
+	tlsDialOpt, err := setupClientCerts(t, "./testdata/client.pem", "./testdata/ca.key", "./testdata/ca.pem")
 	require.NoError(t, err)
 
 	conn, err := DialContext(

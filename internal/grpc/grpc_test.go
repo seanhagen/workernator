@@ -69,7 +69,7 @@ func TestInternal_NewServer(t *testing.T) {
 	}()
 
 	t.Cleanup(func() {
-		if err := server.stop(ctx); err != nil {
+		if err := server.stop(); err != nil {
 			t.Errorf("error stopping server: %v", err)
 		}
 	})

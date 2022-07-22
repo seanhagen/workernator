@@ -1,8 +1,8 @@
 package grpc
 
 import (
+	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"os"
@@ -95,18 +95,6 @@ func (c Config) Valid() error {
 		return fmt.Errorf("invalid port: %w", err)
 	}
 
-	if err := c.certPathValid(); err != nil {
-		return err
-	}
-
-	if err := c.keyPathValid(); err != nil {
-		return err
-	}
-
-	if err := c.chainPathValid(); err != nil {
-		return err
-	}
-
 	if err := c.ACL.valid(); err != nil {
 		return err
 	}
@@ -133,30 +121,28 @@ func (c Config) portValid() error {
 	return nil
 }
 
-func (c Config) keyPathValid() error {
-	c.KeyPath = strings.TrimSpace(c.KeyPath)
-	if err := keyValid(c.KeyPath); err != nil {
-		return fmt.Errorf("invalid key: %w", err)
-	}
-
-	return nil
+// validateCertificate ...
+func (c Config) validateCertificate() (tls.Certificate, error) {
+	return tls.LoadX509KeyPair(c.CertPath, c.KeyPath)
 }
 
-func (c Config) certPathValid() error {
-	c.CertPath = strings.TrimSpace(c.CertPath)
-	if err := certValid(c.CertPath); err != nil {
-		return fmt.Errorf("invalid certificate: %w", err)
+// validateChain ...
+func (c Config) validateChain() (*x509.CertPool, error) {
+	chainReader, err := os.OpenFile(c.ChainPath, os.O_RDONLY, 0444)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open chain file: %w", err)
 	}
 
-	return nil
-}
-
-func (c Config) chainPathValid() error {
-	c.ChainPath = strings.TrimSpace(c.ChainPath)
-	if err := certValid(c.ChainPath); err != nil {
-		return fmt.Errorf("invalid ca chain certificate: %w", err)
+	bits, err := io.ReadAll(chainReader)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read from chain file: %w", err)
 	}
-	return nil
+	certPool := x509.NewCertPool()
+	if ok := certPool.AppendCertsFromPEM(bits); !ok {
+		return nil, fmt.Errorf("unable to append cert from '%v' to cert pool", c.ChainPath)
+	}
+
+	return certPool, nil
 }
 
 func stringInSlice(s string, sl []string) bool {
@@ -166,72 +152,4 @@ func stringInSlice(s string, sl []string) bool {
 		}
 	}
 	return false
-}
-
-func fileValid(path string) error {
-	if path == "" {
-		return fmt.Errorf("path can't be blank")
-	}
-
-	st, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("no file found at '%v'", path)
-	}
-
-	if st.IsDir() {
-		return fmt.Errorf("'%v' is a directory, not a file", path)
-	}
-
-	return nil
-}
-
-func keyValid(path string) error {
-	if err := fileValid(path); err != nil {
-		return fmt.Errorf("invalid key: %w", err)
-	}
-
-	read, err := os.OpenFile(path, os.O_RDONLY, 0444)
-	if err != nil {
-		return fmt.Errorf("unable to open key at '%v', error: %w", path, err)
-	}
-
-	bits, err := io.ReadAll(read)
-	if err != nil {
-		return fmt.Errorf("unable to read key '%v', error: %w", path, err)
-	}
-
-	pemBlock, _ := pem.Decode(bits)
-	if pemBlock == nil {
-		return fmt.Errorf("unable to decode key")
-	}
-
-	_, err = x509.ParseECPrivateKey(pemBlock.Bytes)
-	if err != nil {
-		return fmt.Errorf("unable to parse private key: %w", err)
-	}
-
-	return nil
-}
-
-func certValid(path string) error {
-	if err := fileValid(path); err != nil {
-		return fmt.Errorf("invalid certificate: %w", err)
-	}
-
-	read, err := os.OpenFile(path, os.O_RDONLY, 0444)
-	if err != nil {
-		return fmt.Errorf("unable to open certificate at '%v', error: %w", path, err)
-	}
-
-	bits, err := io.ReadAll(read)
-	if err != nil {
-		return fmt.Errorf("unable to read certificate '%v', error: %w", path, err)
-	}
-
-	pool := x509.NewCertPool()
-	if ok := pool.AppendCertsFromPEM(bits); !ok {
-		return fmt.Errorf("unable to append certificate from '%v' to certificate pool", path)
-	}
-
-	return nil
 }

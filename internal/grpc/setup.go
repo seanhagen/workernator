@@ -3,10 +3,7 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -169,23 +166,14 @@ func setupStreamMiddleware(conf Config, auth Authorizer) (ServerOption, error) {
 }
 
 func setupCerts(conf Config) (ServerOption, error) {
-	cert, err := tls.LoadX509KeyPair(conf.CertPath, conf.KeyPath)
+	cert, err := conf.validateCertificate()
 	if err != nil {
-		return nil, fmt.Errorf("unable to load key pair: %w", err)
+		return nil, err
 	}
 
-	chainReader, err := os.OpenFile(conf.ChainPath, os.O_RDONLY, 0444)
+	certPool, err := conf.validateChain()
 	if err != nil {
-		return nil, fmt.Errorf("unable to open chain file: %w", err)
-	}
-
-	bits, err := io.ReadAll(chainReader)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read from chain file: %w", err)
-	}
-	certPool := x509.NewCertPool()
-	if ok := certPool.AppendCertsFromPEM(bits); !ok {
-		return nil, fmt.Errorf("unable to append cert from '%v' to cert pool", conf.ChainPath)
+		return nil, err
 	}
 
 	creds := Creds(

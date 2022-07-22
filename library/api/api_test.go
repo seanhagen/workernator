@@ -235,9 +235,11 @@ func TestLibrary_Manager_Output(t *testing.T) {
 		expectFile, err := os.Open("./testdata/catme")
 		require.NoError(t, err)
 
-		fileData := []byte{}
-		_, err = io.ReadFull(expectFile, fileData)
+		fileData := make([]byte, 67)
+		n, err := io.ReadFull(expectFile, fileData)
+		assert.Greater(t, n, 0)
 		require.NoError(t, err)
+
 		expect := string(fileData)
 		got := string(gotData)
 		assert.Equal(t, expect, got)

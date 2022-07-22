@@ -102,26 +102,11 @@ func (c *Container) Run(ctx context.Context) error {
 		Stderr: stderr,
 
 		SysProcAttr: &syscall.SysProcAttr{
-			Pdeathsig: unix.SIGTERM,
-			Cloneflags: syscall.CLONE_NEWNS |
-				syscall.CLONE_NEWUTS |
-				syscall.CLONE_NEWIPC |
-				syscall.CLONE_NEWPID |
-				syscall.CLONE_NEWNET |
-				syscall.CLONE_NEWUSER,
-			Unshareflags: syscall.CLONE_NEWNS,
+			Cloneflags: syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS |
+				syscall.CLONE_NEWIPC | syscall.CLONE_NEWPID |
+				syscall.CLONE_NEWNET | syscall.CLONE_NEWUSER,
 
-			// Cloneflags: syscall.CLONE_NEWUSER |
-			// 	syscall.CLONE_NEWUTS |
-			// 	syscall.CLONE_NEWNS |
-			// 	syscall.CLONE_NEWPID |
-			// 	syscall.CLONE_NEWIPC |
-			// 	unix.CLONE_NEWNET,
-			// Unshareflags: syscall.CLONE_NEWNS,
-			// Unshareflags: syscall.CLONE_NEWNS |
-			// 	unix.CLONE_NEWCGROUP |
-			// 	unix.CLONE_NEWUTS |
-			// 	unix.CLONE_NEWNET,
+			Unshareflags: syscall.CLONE_NEWNS,
 
 			UidMappings: []syscall.SysProcIDMap{
 				{ContainerID: 0, HostID: os.Getuid(), Size: 1},
@@ -132,14 +117,20 @@ func (c *Container) Run(ctx context.Context) error {
 			},
 			GidMappingsEnableSetgroups: true,
 
-			AmbientCaps: []uintptr{27}, // was syscall.SYS_MKNOD, but include/uapi/linux/capability.h says it's 27?
+			// want CAP_MKNOD
+			// include/uapi/linux/capability.h says it's 27?
+			//AmbientCaps: []uintptr{27, 21, 18},
 		},
 	}
 	c.cmd = cmd
 
+	_, _ = fmt.Fprintf(c.stdout, "container hasn't run yet\n")
 	if err := cmd.Start(); err != nil {
+		_, _ = fmt.Fprintf(c.stdout, "container encountered error trying to start: %v\n", err)
+		c.cancel()
 		return err
 	}
+	_, _ = fmt.Fprintf(c.stdout, "container running!\n")
 
 	// waits for the command to finish, then umounts the fs & net ns,
 	// then removes container from cgroups, then removes the container directory

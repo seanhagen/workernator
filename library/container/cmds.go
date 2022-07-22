@@ -2,6 +2,8 @@ package container
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -62,11 +64,6 @@ func RunContainer() *cobra.Command {
 				return fmt.Errorf("couldn't prepare container from image: %w", err)
 			}
 
-			// _, _ = fmt.Fprintf(
-			// 	cmd.OutOrStdout(),
-			// 	"container ready, about to run '%v %v' in the container!\n",
-			// 	args[3], strings.Join(args[4:], " "))
-
 			if ioMbps > 0 {
 				args = append(args, "--ioMbps", strconv.Itoa(ioMbps))
 			}
@@ -77,7 +74,7 @@ func RunContainer() *cobra.Command {
 
 			cont.SetArgs(args)
 			cont.SetStdErr(cmd.ErrOrStderr())
-			cont.SetStdOut(cmd.OutOrStdout())
+			cont.SetStdOut(os.Stdout)
 
 			if err := cont.Run(cmd.Context()); err != nil {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "container failed to run: %v\n", err)
@@ -205,21 +202,23 @@ func RunInNamespaceCmd() *cobra.Command {
 				return err
 			}
 
-			// files, err := ioutil.ReadDir("/dev")
-			// if err != nil {
-			// 	wrangler.debugLog("unable to open '/dev' to read: %v\n", err)
-			// } else {
-			// 	for _, f := range files {
-			// 		wrangler.debugLog("found in /dev: %v\n", f.Name())
-			// 	}
-			// }
+			wrangler.debugLog("files in /dev:\n\t")
+			files, err := ioutil.ReadDir("/dev")
+			if err != nil {
+				wrangler.debugLog("unable to open '/dev' to read: %v\n", err)
+			} else {
+				for _, f := range files {
+					wrangler.debugLog("%v ", f.Name())
+				}
+				wrangler.debugLog("\n")
+			}
 
-			// if err := wrangler.setupLocalInterface(containerID); err != nil {
-			// 	if unmErr := wrangler.umountContainerDirectories(containerID); unmErr != nil {
-			// 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "unable to unmount container directories: %v\n", unmErr)
-			// 	}
-			// 	return err
-			// }
+			if err := wrangler.setupLocalInterface(containerID); err != nil {
+				if unmErr := wrangler.umountContainerDirectories(containerID); unmErr != nil {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "unable to unmount container directories: %v\n", unmErr)
+				}
+				return err
+			}
 
 			// if err := wrangler.chrootContainer(containerID); err != nil {
 			// 	return err
@@ -286,9 +285,7 @@ func SetupNetNS() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
 			fmt.Fprintf(cmd.OutOrStdout(), "handling network namespace setup: %v\n", args)
-
 			return wr.setupNetworkNamespace()
 		},
 	}
@@ -311,7 +308,6 @@ func SetupVeth() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
 			fmt.Fprintf(cmd.OutOrStdout(), "handling veth setup: %v\n", args)
 			return wr.setupNetworkVeth()
 		},

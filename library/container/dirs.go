@@ -194,19 +194,21 @@ func (wr *Wrangler) mountContainerDirectories(containerID string) error {
 	for _, dev := range devices {
 		devName := newRoot + "/dev/" + dev.name
 
-		fd, err := unix.Open(devName, unix.O_CREAT|unix.O_RDWR, 0666)
+		fd, err := unix.Open(devName, unix.O_CREAT|unix.O_RDWR|unix.O_SYNC, 0666)
 		if err != nil {
 			wr.debugLog("unable to unix.Open('%v'): %v\n", devName, err)
 		}
 		dt := int(unix.Mkdev(dev.major, dev.minor))
 
 		// devName := "/dev/" + dev.name
-		wr.debugLog("mknod: '%v'\n", devName)
+		wr.debugLog("mknod: '%v':", devName)
 		if err := unix.Mknodat(fd, dev.name, dev.attr, dt); err != nil {
 			// if err := unix.Mknod(devName, dev.attr, dt); err != nil {
 			// return fmt.Errorf("unable to mknod: %w (uid: %v gid: %v euid: %v)",
 			// 	err, os.Getuid(), os.Getgid(), os.Geteuid())
-			wr.debugLog("unable to mknod: %v ", err)
+			wr.debugLog("unable to mknod: %v\n", err)
+		} else {
+			wr.debugLog("success!\n")
 		}
 	}
 

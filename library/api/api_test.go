@@ -224,12 +224,16 @@ func TestLibrary_Manager_Output(t *testing.T) {
 		var r *io.Reader
 		require.Implements(t, r, reader)
 
-		gotData, err := ioutil.ReadAll(reader)
+		gotData, err := io.ReadAll(reader)
 		require.NoError(t, err)
 
-		bits, err := ioutil.ReadFile("./testdata/catme")
+		expectFile, err := os.Open("./testdata/catme")
 		require.NoError(t, err)
-		expect := string(bits)
+
+		fileData := []byte{}
+		_, err = io.ReadFull(expectFile, fileData)
+		require.NoError(t, err)
+		expect := string(fileData)
 		got := string(gotData)
 		assert.Equal(t, expect, got)
 	})

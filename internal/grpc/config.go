@@ -27,8 +27,39 @@ var validRoutes = []string{"start", "stop", "status", "output"}
 // RPCPermissions maps RPC names to a permission level
 type RPCPermissions map[string]Permission
 
+// valid  ...
+func (rpcPerms RPCPermissions) valid(user string) error {
+	if len(rpcPerms) == 0 {
+		return fmt.Errorf("rpc permissions for '%v' are empty", user)
+	}
+
+	for route, perm := range rpcPerms {
+		if !stringInSlice(route, validRoutes) {
+			return fmt.Errorf("'%v' is not a valid route, valid routes: %v", route, validRoutes)
+		}
+		if perm != None && perm != Own && perm != Super {
+			return fmt.Errorf("'%v' is not a valid permissions, valid permissions are None, Own, Super", perm)
+		}
+	}
+	return nil
+}
+
 // UserPermissions maps user names to a set of RPC permissions
 type UserPermissions map[string]RPCPermissions
+
+// valid  ...
+func (userPerms UserPermissions) valid() error {
+	if len(userPerms) == 0 {
+		return fmt.Errorf("acl can't be empty, require at least one configured user")
+	}
+
+	for user, rpcPerms := range userPerms {
+		if err := rpcPerms.valid(user); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Config contains the information required to set up a GRPC server
 type Config struct {
@@ -76,7 +107,7 @@ func (c Config) Valid() error {
 		return err
 	}
 
-	if err := c.aclValid(); err != nil {
+	if err := c.ACL.valid(); err != nil {
 		return err
 	}
 
@@ -125,29 +156,6 @@ func (c Config) chainPathValid() error {
 	if err := certValid(c.ChainPath); err != nil {
 		return fmt.Errorf("invalid ca chain certificate: %w", err)
 	}
-	return nil
-}
-
-func (c Config) aclValid() error {
-	if len(c.ACL) == 0 {
-		return fmt.Errorf("acl can't be empty, require at least one configured user")
-	}
-
-	for user, rpcPerms := range c.ACL {
-		if len(rpcPerms) == 0 {
-			return fmt.Errorf("rpc permissions for '%v' are empty", user)
-		}
-
-		for route, perm := range rpcPerms {
-			if !stringInSlice(route, validRoutes) {
-				return fmt.Errorf("'%v' is not a valid route, valid routes: %v", route, validRoutes)
-			}
-			if perm != None && perm != Own && perm != Super {
-				return fmt.Errorf("'%v' is not a valid permissions, valid permissions are None, Own, Super", perm)
-			}
-		}
-	}
-
 	return nil
 }
 

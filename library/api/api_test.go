@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -38,7 +39,9 @@ func TestLibrary_Manager_StartJob(t *testing.T) {
 	require.NotNil(t, mng)
 
 	ctx := context.TODO()
-	command := "/usr/bin/echo"
+
+	command, err := exec.LookPath("echo")
+	require.NoError(t, err, "could not find 'echo' on PATH!")
 	args := []string{"hey"}
 
 	t.Run("command that doesn't exist should fail", func(t *testing.T) {
@@ -95,7 +98,9 @@ func TestLibrary_Manager_StopJob(t *testing.T) {
 	require.NotNil(t, mng)
 
 	ctx := context.TODO()
-	command := "/usr/bin/sleep"
+	command, err := exec.LookPath("sleep")
+	require.NoError(t, err, "could not find 'sleep' on PATH!")
+
 	args := []string{"40"}
 
 	t.Run("calling StopJob with invalid ID should return an error", func(t *testing.T) {

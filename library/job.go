@@ -257,4 +257,12 @@ func (j *Job) waitForFinish() {
 	// that one time it's handy to have it around still.
 	j.Error = cmdErr
 
+	// finally, close our file handles
+	if err := j.stdout.Close(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to close job '%v' stdout: %v\n", j.ID, err)
+	}
+
+	if err := j.stderr.Close(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to close job '%v' stderr: %v\n", j.ID, err)
+	}
 }

@@ -50,20 +50,41 @@ func BuildClient() error {
 
 // BuildServer builds the server binary
 func BuildServer() error {
-	mg.SerialDeps(ensureBuildDir, Lint)
+	mg.SerialDeps(ensureBuildDir, Lint, buildServerBinary)
 
-	fmt.Print("[BUILD][SERVER] building server...")
-
+	fmt.Print("[BUILD][SERVER] using upx to shrink the binary size... ")
 	binaryOut := buildDir + "/server"
-	err := sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
+	err := sh.Run("upx", binaryOut)
 	if err != nil {
 		fmt.Println(" ERROR")
 		return err
 	}
 	fmt.Println(" SUCCESS")
+	return nil
+}
 
-	fmt.Print("[BUILD][SERVER] using upx to shrink the binary size... ")
-	err = sh.Run("upx", binaryOut)
+// QuickServer builds the server binary without linting
+func QuickServer() error {
+	mg.SerialDeps(ensureBuildDir)
+	return buildServerBinary()
+}
+
+func buildServerBinary() error {
+	mg.SerialDeps(ensureBuildDir)
+
+	fmt.Print("[BUILD][SERVER] building server...")
+	binaryOut := buildDir + "/server"
+	//sh.Exec(env map[string]string, stdout io.Writer, stderr io.Writer, cmd string, args ...string)
+
+	env := map[string]string{
+		"CGO_ENABLED": "0",
+		"GOOS":        "linux",
+	}
+
+	_, err := sh.Exec(env, os.Stdout, os.Stderr,
+		"go", "build", "-o", binaryOut, "./cmd/server",
+	)
+	//err := sh.Run("go", "build", "-o", binaryOut, "./cmd/server")
 	if err != nil {
 		fmt.Println(" ERROR")
 		return err

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/seanhagen/workernator/library/client"
@@ -44,8 +43,6 @@ starting, stopping, getting the status, and viewing the output.`,
 	TraverseChildren: true,
 
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		conf := client.Config{
 			Host:      host,
 			Port:      port,
@@ -54,7 +51,7 @@ starting, stopping, getting the status, and viewing the output.`,
 			ChainPath: chainPath,
 		}
 
-		c, err := client.NewClient(ctx, conf)
+		c, err := client.NewClient(cmd.Context(), conf)
 		if err != nil {
 			return fmt.Errorf("unable to create API client: %w", err)
 		}

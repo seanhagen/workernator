@@ -161,8 +161,7 @@ func (j *Job) pipeOutput(file *os.File, writeTo *io.PipeWriter) {
 	for {
 		fi, err := file.Stat()
 		if err != nil {
-			x := fmt.Errorf("unable to stat file: %w", err)
-			_ = writeTo.CloseWithError(x)
+			_ = writeTo.CloseWithError(fmt.Errorf("unable to stat file: %w", err))
 			return
 		}
 

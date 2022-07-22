@@ -38,9 +38,6 @@ Each job has it's own set of arguments, so see each sub-command to
 view what arguments are required.`,
 
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) <= 0 {
-			return fmt.Errorf("id argument is required")
-		}
 		return nil
 	},
 

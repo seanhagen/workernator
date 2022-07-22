@@ -11,42 +11,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// mountProc ...
-func (wr *Wrangler) mountProc(containerID string) error {
-	newroot := wr.run + "/containers/" + containerID + "/fs/mnt"
-	// newroot, err := filepath.Abs(partialRoot)
-	// if err != nil {
-	// 	return fmt.Errorf("couldn't get absolute path from '%v': %w", partialRoot, err)
-	// }
-	// newroot := wr.run + "/" + containerID + "/fs/mnt"
-
-	source := "proc"
-	target := filepath.Join(newroot, "/proc")
-	fstype := "proc"
-	flags := 0
-	data := ""
-
-	wr.debugLog("attempting to ensure '%v' is present...\n", target)
-	if err := os.MkdirAll(target, 0755); err != nil {
-		return fmt.Errorf("couldn't make directory: %w", err)
-	}
-
-	wr.debugLog("attempting to mount '%v' as '/proc' within container...\n", target)
-	if err := syscall.Mount(source, target, fstype, uintptr(flags), data); err != nil {
-		return err
-	}
-
-	// wr.debugLog("attempting to read /proc/filesystems\n")
-	// fs, err := ioutil.ReadFile("/proc/filesystems")
-	// if err != nil {
-	// 	wr.debugLog("unable to read /proc/filesystems: %v\n", err)
-	// } else {
-	// 	wr.debugLog("read /proc/filesystems:\n%v\n", string(fs))
-	// }
-
-	return nil
-}
-
 // pivotRoot ...
 func (wr *Wrangler) pivotRoot(containerID string) error {
 	newroot := wr.run + "/containers/" + containerID + "/fs/mnt"

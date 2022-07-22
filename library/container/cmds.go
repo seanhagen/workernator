@@ -183,13 +183,9 @@ func RunInNamespaceCmd() *cobra.Command {
 
 			// okay, non-cgroup stuff now
 
-			// if err := wrangler.copyNameserverConfig(containerID); err != nil {
-			// 	return err
-			// }
-
-			// if err := wrangler.mountProc(containerID); err != nil {
-			// 	return err
-			// }
+			if err := wrangler.copyNameserverConfig(containerID); err != nil {
+				return err
+			}
 
 			if err := wrangler.mountContainerDirectories(containerID); err != nil {
 				if unmErr := wrangler.umountContainerDirectories(containerID); unmErr != nil {

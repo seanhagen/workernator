@@ -120,6 +120,7 @@ func (c *Container) Run(ctx context.Context) error {
 			// want CAP_MKNOD
 			// include/uapi/linux/capability.h says it's 27?
 			//AmbientCaps: []uintptr{27, 21, 18},
+			AmbientCaps: []uintptr{8, 18, 21, 27},
 		},
 	}
 	c.cmd = cmd

@@ -12,7 +12,7 @@ func TestInternal_Config_Valid(t *testing.T) {
 		Port: "8080",
 
 		CertPath:  "./testdata/server.pem",
-		KeyPath:   "./testdata/cakey.key",
+		KeyPath:   "./testdata/ca.key",
 		ChainPath: "./testdata/ca.pem",
 
 		ACL: UserPermissions{
@@ -57,19 +57,24 @@ func TestInternal_Config_Valid(t *testing.T) {
 
 		conf := validConfig
 		conf.CertPath = ""
-		assert.Error(conf.Valid())
+		_, err := conf.validateCertificate()
+		assert.Error(err)
 
 		conf.CertPath = "./testdata"
-		assert.Error(conf.Valid())
+		_, err = conf.validateCertificate()
+		assert.Error(err)
 
 		conf.CertPath = "./testdata/file-does-not-exist"
-		assert.Error(conf.Valid())
+		_, err = conf.validateCertificate()
+		assert.Error(err)
 
 		conf.CertPath = "./testdata/not-a-cert"
-		assert.Error(conf.Valid())
+		_, err = conf.validateCertificate()
+		assert.Error(err)
 
 		conf.CertPath = "./testdata/server.pem"
-		assert.NoError(conf.Valid())
+		_, err = conf.validateCertificate()
+		assert.NoError(err)
 	})
 
 	t.Run("valid certificate key path", func(t *testing.T) {
@@ -77,19 +82,24 @@ func TestInternal_Config_Valid(t *testing.T) {
 
 		conf := validConfig
 		conf.KeyPath = ""
-		assert.Error(conf.Valid(), "expected error saying path can't be blank")
+		_, err := conf.validateCertificate()
+		assert.Error(err, "expected error saying path can't be blank")
 
 		conf.KeyPath = "./testdata"
-		assert.Error(conf.Valid(), "expected error saying directory is invalid path")
+		_, err = conf.validateCertificate()
+		assert.Error(err, "expected error saying directory is invalid path")
 
 		conf.KeyPath = "./testdata/file-does-not-exist"
-		assert.Error(conf.Valid(), "expected error saying file doesn't exist")
+		_, err = conf.validateCertificate()
+		assert.Error(err, "expected error saying file doesn't exist")
 
 		conf.KeyPath = "./testdata/not-a-cert"
-		assert.Error(conf.Valid(), "expected error saying file couldn't be added to pool")
+		_, err = conf.validateCertificate()
+		assert.Error(err, "expected error saying file couldn't be added to pool")
 
-		conf.KeyPath = "./testdata/cakey.key"
-		assert.NoError(conf.Valid(), "expected no error")
+		conf.KeyPath = "./testdata/ca.key"
+		_, err = conf.validateCertificate()
+		assert.NoError(err, "expected no error")
 	})
 
 	t.Run("valid ca chain path", func(t *testing.T) {
@@ -97,19 +107,24 @@ func TestInternal_Config_Valid(t *testing.T) {
 
 		conf := validConfig
 		conf.ChainPath = ""
-		assert.Error(conf.Valid(), "expected error saying path can't be blank")
+		_, err := conf.validateChain()
+		assert.Error(err, "expected error saying path can't be blank")
 
 		conf.ChainPath = "./testdata"
-		assert.Error(conf.Valid(), "expected error saying directory is invalid path")
+		_, err = conf.validateChain()
+		assert.Error(err, "expected error saying directory is invalid path")
 
 		conf.ChainPath = "./testdata/file-does-not-exist"
-		assert.Error(conf.Valid(), "expected error saying file doesn't exist")
+		_, err = conf.validateChain()
+		assert.Error(err, "expected error saying file doesn't exist")
 
 		conf.ChainPath = "./testdata/not-a-cert"
-		assert.Error(conf.Valid(), "expected error saying file couldn't be added to pool")
+		_, err = conf.validateChain()
+		assert.Error(err, "expected error saying file couldn't be added to pool")
 
 		conf.ChainPath = "./testdata/ca.pem"
-		assert.NoError(conf.Valid(), "expected no error from ./testdata/ca.pem")
+		_, err = conf.validateChain()
+		assert.NoError(err, "expected no error from ./testdata/ca.pem")
 	})
 
 	t.Run("valid ACL", func(t *testing.T) {

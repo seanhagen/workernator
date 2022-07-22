@@ -236,14 +236,14 @@ func (j *Job) waitForFinish() {
 	j.Ended = time.Now()
 
 	// job wasn't killed, but failed for some reason
-	if cmdErr != nil && exitCode != statusOK {
+	if cmdErr != nil && exitCode != statusOK && exitCode != statusKilled {
 		j.Error = cmdErr
 		j.Status = Failed
 		return
 	}
 
 	// no error, but not 'ok' exit code
-	if cmdErr == nil && exitCode != statusOK {
+	if cmdErr == nil && exitCode != statusOK && exitCode != statusKilled {
 		j.Error = fmt.Errorf("exited with status %v", exitCode)
 		j.Status = Failed
 		return
@@ -256,6 +256,7 @@ func (j *Job) waitForFinish() {
 		return
 	}
 
+	_, _ = fmt.Fprintf(os.Stdout, "job finished successfully\n")
 	// if we got here, the job should have exited successfully
 	j.Status = Finished
 

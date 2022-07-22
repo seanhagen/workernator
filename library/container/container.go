@@ -150,22 +150,21 @@ func (c *Container) cleanupWhenDone() {
 		_, _ = fmt.Fprintf(os.Stderr, "unable to unmount network namespace: %v\n", err)
 	}
 
-	// _, _ = fmt.Fprintf(os.Stdout, "umounting container fs\n")
-	// if err := unmountContainerFS(c.id.String(), c.pathToRunDir); err != nil {
-	// 	_, _ = fmt.Fprintf(os.Stderr, "unable to umount container filesystem: %v\n", err)
-	// }
+	_, _ = fmt.Fprintf(os.Stdout, "umounting container fs\n")
+	if err := unmountContainerFS(c.id.String(), c.pathToRunDir); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to umount container filesystem: %v\n", err)
+	}
 
 	_, _ = fmt.Fprintf(os.Stdout, "removing container from cgroups\n")
 	if err := removeContainerCGroups(c.id.String()); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container cgroups: %v\n", err)
 	}
 
-	// _, _ = fmt.Fprintf(os.Stdout, "removing container fs directory\n")
-	// if err := os.RemoveAll(c.pathToContainerFs); err != nil {
-	// 	_, _ = fmt.Fprintf(os.Stderr, "unable to remove container dir '%v': %v", c.pathToContainerFs, err)
-	// }
+	_, _ = fmt.Fprintf(os.Stdout, "removing container fs directory\n")
+	if err := os.RemoveAll(c.pathToContainerFs); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to remove container dir '%v': %v", c.pathToContainerFs, err)
+	}
 	c.cancel()
-
 }
 
 // Wait  ...
